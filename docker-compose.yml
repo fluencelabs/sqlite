@@ -1,0 +1,7 @@
+version: '3'
+services:
+  sqlite3:
+    build:
+      context: .
+    volumes:
+     - .:/code
