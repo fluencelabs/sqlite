@@ -15,6 +15,14 @@ int init() {
 
 int g_isInited = 0;
 
+void store(char *ptr, unsigned char byte) {
+  *ptr = byte;
+}
+
+unsigned char load(const unsigned char *ptr) {
+  return *ptr;
+}
+
 void* allocate(size_t size) {
   return malloc(size + 1);
 }
