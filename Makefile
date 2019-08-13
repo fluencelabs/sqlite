@@ -1,6 +1,6 @@
 TARGET = sqlite3
 CC = /opt/wasi-sdk/bin/clang
-SYSROOT = /opt/wasi-sdk/share/sysroot
+SYSROOT = /opt/wasi-sdk/share/wasi-sysroot
 TARGET_TRIPLE = wasm32-unknown-wasi
 CFLAGS = -nostartfiles -fvisibility=hidden
 LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
@@ -16,7 +16,7 @@ default: $(TARGET)
 all: default
 
 $(TARGET): $(SDK) $(SQLITE_SRC) $(WRAPPER_SRC)
-	$(CC) --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) -O2 $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
+	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
 
 .PRECIOUS: $(TARGET)
 
