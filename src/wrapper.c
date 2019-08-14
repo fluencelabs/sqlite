@@ -163,6 +163,7 @@ const char *invoke(char *request, int request_size) {
     }
   }
 
+  deallocate(request, request_size + 1);
   freeText(&str);
 
   return response;
