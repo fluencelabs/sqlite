@@ -1,6 +1,6 @@
 # SQLite
 
-Sqlite fork ported to WebAssembly.
+Sqlite fork ported to WebAssembly and adapted for the Fluence network.
 
 # How to build
 
