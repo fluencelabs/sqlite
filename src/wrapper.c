@@ -15,36 +15,46 @@ int init() {
 
 int g_isInited = 0;
 
+/**
+ * Stores one byte by a given address in the module memory.
+ *
+ * @param ptr a address where byte should be stored
+ * @param value a byte to be stored
+ */
 void store(char *ptr, unsigned char byte) {
   *ptr = byte;
 }
 
-void sqlite_store(char *ptr, unsigned char byte) {
-  store(ptr, byte);
-}
-
-unsigned char load(const unsigned char *ptr) {
+/**
+ * Returns one byte by a given address in the module memory.
+ *
+ * @param ptr a address at which the needed byte is located
+ * @return the byte at the given address
+ */
+ unsigned char load(const unsigned char *ptr) {
   return *ptr;
 }
 
-unsigned char sqlite_load(const unsigned char *ptr) {
-  return load(ptr);
-}
-
-void* allocate(size_t size) {
+/**
+ * Allocates a memory region of a given size.
+ * Could be used by Wasm execution environments for byte array passing.
+ *
+ * @param size a size of allocated memory region
+ * @return a pointer to the allocated memory region
+ */
+ void* allocate(size_t size) {
   return malloc(size + 1);
 }
 
-void* sqlite_allocate(size_t size) {
-  return allocate(size);
-}
-
-void deallocate(void *ptr, int size) {
+/**
+ * Frees a memory region.
+ * Could be used by Wasm execution environments for freeing previous memory allocated by `allocate` function.
+ *
+ * @param ptr a pointer to the previously allocated memory region
+ * @param size a size of the previously allocated memory region
+ */
+ void deallocate(void *ptr, int size) {
   free(ptr);
-}
-
-void sqlite_deallocate(void *ptr, int size) {
-  deallocate(ptr, size);
 }
 
 char *write_response(char *response, int response_size) {
@@ -130,7 +140,15 @@ static int captureOutputCallback(void *pArg, int nArg, char **azArg, char **az){
   return 0;
 }
 
-const char *invoke(char *request, int request_size) {
+/**
+ * Executes given SQL request and returns result in as a pointer to the following structure:
+ * | result size (4 bytes, le)| result (size bytes) |.
+ *
+ * @param sql a pointer to the supplied sql request
+ * @param length a size of the supplied sql request
+ * @return a pointer to the struct contains result_size and result
+ */
+ const char *invoke(char *request, int request_size) {
   if(g_isInited == 0) {
     // TODO: check the return code
     init();
@@ -143,12 +161,13 @@ const char *invoke(char *request, int request_size) {
     g_isInited = 1;
   }
 
-  request[request_size] = 0;
+  request[request_size] = '\n';
 
 #ifdef ENABLE_LOG
   wasm_log(request, request_size);
-  wasm_log("\n", 1);
 #endif
+  request[request_size] = 0;
+
   ShellText str;
   initText(&str);
   char *errorMessage = 0;
@@ -175,6 +194,24 @@ const char *invoke(char *request, int request_size) {
   return response;
 }
 
+// these functions are needed to support Rust backends
+// (https://github.com/rust-lang/rust/issues/63562)
 const char *sqlite_invoke(char *request, int request_size) {
   return invoke(request, request_size);
+}
+
+void* sqlite_allocate(size_t size) {
+  return allocate(size);
+}
+
+void sqlite_deallocate(void *ptr, int size) {
+  deallocate(ptr, size);
+}
+
+void sqlite_store(char *ptr, unsigned char byte) {
+  store(ptr, byte);
+}
+
+unsigned char sqlite_load(const unsigned char *ptr) {
+  return load(ptr);
 }
