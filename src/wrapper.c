@@ -21,8 +21,8 @@ int g_isInited = 0;
  * @param ptr a address where byte should be stored
  * @param value a byte to be stored
  */
-void store(char *ptr, unsigned char byte) {
-  *ptr = byte;
+void store(char *ptr, unsigned char value) {
+  *ptr = value;
 }
 
 /**
@@ -144,8 +144,8 @@ static int captureOutputCallback(void *pArg, int nArg, char **azArg, char **az){
  * Executes given SQL request and returns result in as a pointer to the following structure:
  * | result size (4 bytes, le)| result (size bytes) |.
  *
- * @param sql a pointer to the supplied sql request
- * @param length a size of the supplied sql request
+ * @param request a pointer to the supplied sql request
+ * @param request_size a size of the supplied sql request
  * @return a pointer to the struct contains result_size and result
  */
  const char *invoke(char *request, int request_size) {
@@ -194,7 +194,7 @@ static int captureOutputCallback(void *pArg, int nArg, char **azArg, char **az){
   return response;
 }
 
-// these functions are needed to support Rust backends
+// functions with prefix sqlite_ are needed to support Rust backends
 // (https://github.com/rust-lang/rust/issues/63562)
 const char *sqlite_invoke(char *request, int request_size) {
   return invoke(request, request_size);
