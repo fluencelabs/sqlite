@@ -1,7 +1,7 @@
 TARGET = sqlite3
-CC = /opt/wasi-sdk/bin/clang
-SYSROOT = /opt/wasi-sdk/share/wasi-sysroot
-TARGET_TRIPLE = wasm32-unknown-wasi
+CC = /bin/clang
+SYSROOT = /share/wasi-sysroot
+TARGET_TRIPLE = wasm32-wasi
 CFLAGS = -nostartfiles -fvisibility=hidden
 LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
 EXPORT_FUNCS = \
