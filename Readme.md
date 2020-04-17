@@ -2,6 +2,8 @@
 
 Sqlite fork ported to WebAssembly and adapted for the Fluence network. Could be launched and played on the Fluence [dashboard](http://dash.fluence.network/deploy/sqlite).
 
+Based on SQlite version 3.31.1.
+
 # How to build
 
 This app could be built either with docker 
@@ -10,7 +12,7 @@ This app could be built either with docker
 docker-compose up
 ```
 
-or by Makefile with [wasi-sdk](https://github.com/CraneStation/wasi-sdk) installed
+or by Makefile with [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) installed
 ```bash
 make
 ```
@@ -82,4 +84,4 @@ More information about ways of porting C/C++ code to Wasm could be found in our 
 
 ## Future plans
 
-We are working on supporting of subset of WASI syscalls to allow interaction with hard disk in a deterministic way.
+We are working on supporting of subset of WASI syscalls and interface types support for more convinient parameter passing scheme.
