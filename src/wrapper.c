@@ -111,13 +111,13 @@ const char *invoke(char *request, int request_size) {
     // TODO: check the return code
     init();
     const char successInitMessage[] = "Sqlite has been initialized";
-    wasm_log(successInitMessage, sizeof(successInitMessage));
+    log_utf8_string(successInitMessage, sizeof(successInitMessage));
     g_isInited = 1;
   }
 
   request[request_size] = 0;
 
-  wasm_log(request, request_size);
+  log_utf8_string(request, request_size);
 
   ShellText str;
   initText(&str);

@@ -1,11 +1,15 @@
-#ifndef C_SDK_LOGGER_H
-#define C_SDK_LOGGER_H
+#ifndef FLUENCE_C_SDK_LOGGER_H
+#define FLUENCE_C_SDK_LOGGER_H
+
+#define __LOGGER_IMPORT(name) \
+    __attribute__((__import_module__("logger"), __import_name__(#name)))
 
 /**
- * Writes provided string to Wasm VM logger.
+ * Writes provided utf8 string to Wasm VM logger.
  *
- * @param log_message a message that should be logged.
+ * @param str a pointer to the string that should be logged.
+ * @param len a size of the string that should be logged.
  */
-void wasm_log(const char *str, int len);
+void log_utf8_string(const char *str, int len) __LOGGER_IMPORT(log_utf8_string);
 
-#endif //C_SDK_LOGGER_H
+#endif // FLUENCE_C_SDK_LOGGER_H

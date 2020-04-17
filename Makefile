@@ -129,17 +129,16 @@ SQLITE_FLAGS = \
 	-DSQLITE_ENABLE_DESERIALIZE\
 	-DSQLITE_INTROSPECTION_PRAGMAS\
 	-DSQLITE_OMIT_POPEN
-SDK = sdk/logger.c
 
 .PHONY: default all clean
 
 default: $(TARGET)
 all: default
 
-$(TARGET): $(SDK) $(SQLITE_SRC) $(WRAPPER_SRC)
+$(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
 
 .PRECIOUS: $(TARGET)
 
 clean:
-	-rm -f $(TARGET).wasm
+	-rm -f $(TARGET).wasm $(TARGET).wat
