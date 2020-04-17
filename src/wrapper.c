@@ -110,14 +110,20 @@ const char *invoke(char *request, int request_size) {
   if(g_isInited == 0) {
     // TODO: check the return code
     init();
+
+#if LOG_ENABLED
     const char successInitMessage[] = "Sqlite has been initialized";
     log_utf8_string(successInitMessage, sizeof(successInitMessage));
+#endif
+
     g_isInited = 1;
   }
 
   request[request_size] = 0;
 
+#if LOG_ENABLED
   log_utf8_string(request, request_size);
+#endif
 
   ShellText str;
   initText(&str);
