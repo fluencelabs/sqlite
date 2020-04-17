@@ -38,10 +38,10 @@
 /* #undef HAVE_LOCALTIME_S */
 
 /* Define to 1 if you have the <malloc.h> header file. */
-#define HAVE_MALLOC_H 1
+/* #undef HAVE_MALLOC_H */
 
 /* Define to 1 if you have the `malloc_usable_size' function. */
-#define HAVE_MALLOC_USABLE_SIZE 1
+/* #undef HAVE_MALLOC_USABLE_SIZE */
 
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
@@ -50,13 +50,13 @@
 #define HAVE_PREAD 1
 
 /* Define to 1 if you have the pread64() function. */
-#define HAVE_PREAD64 1
+/* #undef HAVE_PREAD64 */
 
 /* Define to 1 if you have the pwrite() function. */
 #define HAVE_PWRITE 1
 
 /* Define to 1 if you have the pwrite64() function. */
-#define HAVE_PWRITE64 1
+/* #undef HAVE_PWRITE64 */
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HAVE_STDINT_H 1
@@ -65,7 +65,7 @@
 #define HAVE_STDLIB_H 1
 
 /* Define to 1 if you have the strchrnul() function */
-#define HAVE_STRCHRNUL 1
+/* #undef HAVE_STRCHRNUL */
 
 /* Define to 1 if you have the <strings.h> header file. */
 #define HAVE_STRINGS_H 1
@@ -114,13 +114,13 @@
 #define PACKAGE_NAME "sqlite"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "sqlite 3.30.0"
+#define PACKAGE_STRING "sqlite 3.31.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "sqlite"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.30.0"
+#define PACKAGE_VERSION "3.31.1"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1

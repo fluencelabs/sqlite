@@ -17,10 +17,6 @@
 ** sqlite3_deserialize().
 */
 #include "sqliteInt.h"
-#if __sqlite_unmodified_upstream
-#else
-#include <stdlib.h>
-#endif
 #ifdef SQLITE_ENABLE_DESERIALIZE
 
 /*
@@ -426,15 +422,7 @@ static void memdbDlClose(sqlite3_vfs *pVfs, void *pHandle){
 ** random data.
 */
 static int memdbRandomness(sqlite3_vfs *pVfs, int nByte, char *zBufOut){
-#if __sqlite_unmodified_upstream
   return ORIGVFS(pVfs)->xRandomness(ORIGVFS(pVfs), nByte, zBufOut);
-#else
-  zBufOut = malloc(nByte);
-  for(int i = 0; i < nByte; ++i) {
-    zBufOut[i] = rand() % 256;
-  }
-  return SQLITE_OK;
-#endif
 }
 
 /*
@@ -622,23 +610,14 @@ end_deserialize:
 ** Register the new VFS.
 */
 int sqlite3MemdbInit(void){
-#if __sqlite_unmodified_upstream
   sqlite3_vfs *pLower = sqlite3_vfs_find(0);
   int sz = pLower->szOsFile;
   memdb_vfs.pAppData = pLower;
-#else
-  memdb_vfs.pAppData = (void *)0xFFFFFFFF;
-  int sz = sizeof(MemFile);
-#endif
   /* In all known configurations of SQLite, the size of a default
   ** sqlite3_file is greater than the size of a memdb sqlite3_file.
   ** Should that ever change, remove the following NEVER() */
   if( NEVER(sz<sizeof(MemFile)) ) sz = sizeof(MemFile);
   memdb_vfs.szOsFile = sz;
-#if __sqlite_unmodified_upstream // Make memdb the default database
   return sqlite3_vfs_register(&memdb_vfs, 0);
-#else
-  return sqlite3_vfs_register(&memdb_vfs, 1);
-#endif
 }
 #endif /* SQLITE_ENABLE_DESERIALIZE */
