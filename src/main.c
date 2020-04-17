@@ -237,7 +237,9 @@ int sqlite3_initialize(void){
     }
     if( rc==SQLITE_OK ){
       sqlite3GlobalConfig.isPCacheInit = 1;
+#if __sqlite_unmodified_upstream
       rc = sqlite3OsInit();
+#endif
     }
 #ifdef SQLITE_ENABLE_DESERIALIZE
     if( rc==SQLITE_OK ){
@@ -321,7 +323,9 @@ int sqlite3_shutdown(void){
     void SQLITE_EXTRA_SHUTDOWN(void);
     SQLITE_EXTRA_SHUTDOWN();
 #endif
+#if __sqlite_unmodified_upstream
     sqlite3_os_end();
+#endif
     sqlite3_reset_auto_extension();
     sqlite3GlobalConfig.isInit = 0;
   }
