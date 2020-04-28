@@ -15,12 +15,36 @@ int init() {
 
 int g_isInited = 0;
 
+void store(char *ptr, unsigned char byte) {
+  *ptr = byte;
+}
+
+void sqlite_store(char *ptr, unsigned char byte) {
+  store(ptr, byte);
+}
+
+unsigned char load(const unsigned char *ptr) {
+  return *ptr;
+}
+
+unsigned char sqlite_load(const unsigned char *ptr) {
+  return load(ptr);
+}
+
 void* allocate(size_t size) {
   return malloc(size + 1);
 }
 
+void* sqlite_allocate(size_t size) {
+  return allocate(size);
+}
+
 void deallocate(void *ptr, int size) {
   free(ptr);
+}
+
+void sqlite_deallocate(void *ptr, int size) {
+  deallocate(ptr, size);
 }
 
 char *write_response(char *response, int response_size) {
@@ -36,9 +60,9 @@ char *write_response(char *response, int response_size) {
 
 typedef struct ShellText ShellText;
 struct ShellText {
-    char *z;
-    int n;
-    int nAlloc;
+  char *z;
+  int n;
+  int nAlloc;
 };
 
 static void initText(ShellText *p){
@@ -112,7 +136,7 @@ const char *invoke(char *request, int request_size) {
     init();
 
 #if LOG_ENABLED
-    const char successInitMessage[] = "Sqlite has been initialized";
+    const char successInitMessage[] = "Sqlite has been initialized\n";
     log_utf8_string(successInitMessage, sizeof(successInitMessage));
 #endif
 
@@ -150,3 +174,6 @@ const char *invoke(char *request, int request_size) {
   return response;
 }
 
+const char *sqlite_invoke(char *request, int request_size) {
+  return invoke(request, request_size);
+}
