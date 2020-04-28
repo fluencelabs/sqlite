@@ -9,12 +9,7 @@ EXPORT_FUNCS = \
 	--export=deallocate,$\
 	--export=invoke,$\
 	--export=load,$\
-	--export=store,$\
-	--export=sqlite_allocate,$\
-	--export=sqlite_deallocate,$\
-	--export=sqlite_invoke,$\
-	--export=sqlite_load,$\
-	--export=sqlite_store
+	--export=store
 SQLITE_SRC = \
 	src/alter.c\
 	src/analyze.c\
@@ -128,8 +123,7 @@ SQLITE_FLAGS = \
 	-DSQLITE_ENABLE_OFFSET_SQL_FUNC\
 	-DSQLITE_ENABLE_DESERIALIZE\
 	-DSQLITE_INTROSPECTION_PRAGMAS\
-	-DSQLITE_OMIT_POPEN\
-	-DLOG_ENABLED
+	-DSQLITE_OMIT_POPEN
 
 .PHONY: default all clean
 
