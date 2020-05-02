@@ -149,7 +149,7 @@ const char *invoke(char *request, int request_size) {
     } else {
       // if a request was successfull, sqlite doesn't return anything as the result string
       const char success_result[] = "OK";
-      response = write_response((char *)success_result, sizeof(success_result));
+      response = write_response((char *)success_result, strlen(success_result));
     }
   }
 
