@@ -7,9 +7,11 @@ LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
 EXPORT_FUNCS = \
 	--export=allocate,$\
 	--export=deallocate,$\
-	--export=invoke,$\
-	--export=load,$\
-	--export=store
+	--export=set_result_size,$\
+	--export=set_result_ptr,$\
+	--export=get_result_size,$\
+	--export=get_result_ptr,$\
+	--export=invoke
 SQLITE_SRC = \
 	src/alter.c\
 	src/analyze.c\

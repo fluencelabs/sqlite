@@ -4,3 +4,6 @@
 # Wasm files
 *.wasm
 *.wat
+
+# REPL history
+.repl_history

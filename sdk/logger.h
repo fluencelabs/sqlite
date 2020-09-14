@@ -2,7 +2,7 @@
 #define FLUENCE_C_SDK_LOGGER_H
 
 #define __LOGGER_IMPORT(name) \
-    __attribute__((__import_module__("logger"), __import_name__(#name)))
+    __attribute__((__import_module__("host"), __import_name__(#name)))
 
 /**
  * Writes provided utf8 string to Wasm VM logger.

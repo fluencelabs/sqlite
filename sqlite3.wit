@@ -1,0 +1,44 @@
+;; Fluence SQLite fork Wasm Interface Types
+
+;; allocate
+(@interface type (func (param i32) (result i32)))       ;; 0
+
+;; deallocate
+(@interface type (func (param i32 i32)))                ;; 1
+
+;; invoke
+(@interface type (func (param string) (result string))) ;; 2
+
+;; get_result_ptr/get_result_size
+(@interface type (func (result i32)))                   ;; 3
+
+;; set_result_ptr/set_result_size
+(@interface type (func (param i32)))                    ;; 4
+
+
+(@interface export "allocate" (func  0))               ;; 0
+(@interface export "deallocate" (func 1))              ;; 1
+(@interface export "invoke" (func 2))                  ;; 2
+(@interface export "get_result_size" (func 3))         ;; 3
+(@interface export "get_result_ptr" (func 3))          ;; 4
+(@interface export "set_result_size" (func 4))         ;; 5
+(@interface export "set_result_ptr" (func 4))          ;; 6
+
+;; adapter for export invoke function
+(@interface func (type 2)
+    arg.get 0
+    string.size
+    call-core 0             ;; call allocate
+    arg.get 0
+    string.lower_memory
+    call-core 2             ;; call invoke
+    call-core 4             ;; call get_result_size
+    call-core 3             ;; call get_result_ptr
+    string.lift_memory
+    call-core 4             ;; call get_result_size
+    call-core 3             ;; call get_result_ptr
+    call-core 1             ;; call deallocate
+)
+
+;; Implementations
+(@interface implement (func 2) (func 2))

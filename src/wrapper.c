@@ -3,6 +3,8 @@
 #include "sqliteInt.h"
 
 sqlite3 *state;
+char *RESULT_PTR;
+int RESULT_SIZE;
 
 int init() {
   const int rc = sqlite3_initialize();
@@ -15,14 +17,6 @@ int init() {
 
 int g_isInited = 0;
 
-void store(char *ptr, unsigned char byte) {
-  *ptr = byte;
-}
-
-unsigned char load(const unsigned char *ptr) {
-  return *ptr;
-}
-
 void* allocate(size_t size) {
   return malloc(size + 1);
 }
@@ -31,15 +25,20 @@ void deallocate(void *ptr, int size) {
   free(ptr);
 }
 
-char *write_response(char *response, int response_size) {
-  char *result_response = allocate(response_size + 4);
+void set_result_ptr(char *ptr) {
+  RESULT_PTR = ptr;
+}
 
-  for(int i = 0; i < 4; ++i) {
-    result_response[i] = (response_size >> 8*i) & 0xFF;
-  }
+void set_result_size(int size) {
+  RESULT_SIZE = size;
+}
 
-  memcpy(result_response + 4, response, response_size);
-  return result_response;
+int get_result_size(void) {
+  return RESULT_SIZE;
+}
+
+char *get_result_ptr() {
+  return RESULT_PTR;
 }
 
 typedef struct ShellText ShellText;
@@ -114,7 +113,7 @@ static int captureOutputCallback(void *pArg, int nArg, char **azArg, char **az){
   return 0;
 }
 
-const char *invoke(char *request, int request_size) {
+void invoke(char *request, int request_size) {
   if(g_isInited == 0) {
     // TODO: check the return code
     init();
@@ -141,19 +140,17 @@ const char *invoke(char *request, int request_size) {
 
   char *response = 0;
   if(rc || errorMessage) {
-    response = write_response(errorMessage, strlen(errorMessage));
+    RESULT_PTR = errorMessage;
+    RESULT_SIZE = strlen(errorMessage);
   }
   else {
     if(str.n != 0) {
-      response = write_response(str.z, str.n);
+      RESULT_PTR = str.z;
+      RESULT_SIZE = str.n;
     } else {
       // if a request was successfull, sqlite doesn't return anything as the result string
-      const char success_result[] = "OK";
-      response = write_response((char *)success_result, strlen(success_result));
+      RESULT_PTR = strdup("OK");
+      RESULT_SIZE = 2;
     }
   }
-
-  freeText(&str);
-
-  return response;
 }
