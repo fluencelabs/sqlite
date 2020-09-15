@@ -1,20 +1,19 @@
 ;; Fluence SQLite fork Wasm Interface Types
 
 ;; allocate
-(@interface type (func (param i32) (result i32)))       ;; 0
+(@interface type (func (param $size: i32) (result i32)))                ;; 0
 
 ;; deallocate
-(@interface type (func (param i32 i32)))                ;; 1
+(@interface type (func (param $pointer: i32 $size: i32)))               ;; 1
 
 ;; invoke
-(@interface type (func (param string) (result string))) ;; 2
+(@interface type (func (param $request: string) (result string)))       ;; 2
 
 ;; get_result_ptr/get_result_size
-(@interface type (func (result i32)))                   ;; 3
+(@interface type (func (result i32)))                                   ;; 3
 
 ;; set_result_ptr/set_result_size
-(@interface type (func (param i32)))                    ;; 4
-
+(@interface type (func (param $result: i32)))                           ;; 4
 
 (@interface export "allocate" (func  0))               ;; 0
 (@interface export "deallocate" (func 1))              ;; 1
