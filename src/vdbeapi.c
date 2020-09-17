@@ -1108,6 +1108,15 @@ static void columnMallocFailure(sqlite3_stmt *pStmt)
 ** The following routines are used to access elements of the current row
 ** in the result set.
 */
+
+void sqlite3_column_blob_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_column_blob) {
+   const char *result = sqlite3_column_blob(pStmt, i);
+   int blob_len = sqlite3_column_bytes(pStmt, i);
+
+   set_result_ptr((char *)result);
+   set_result_size(blob_len);
+}
+
 const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int i){
   const void *val;
   val = sqlite3_value_blob( columnMem(pStmt,i) );
@@ -1143,6 +1152,14 @@ sqlite_int64 sqlite3_column_int64(sqlite3_stmt *pStmt, int i){
   columnMallocFailure(pStmt);
   return val;
 }
+
+void sqlite3_column_text_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_column_text) {
+  const unsigned char *result = sqlite3_column_text(pStmt, i);
+
+  set_result_ptr((char *)result);
+  set_result_size(strlen(result));
+}
+
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int i){
   const unsigned char *val = sqlite3_value_text( columnMem(pStmt,i) );
   columnMallocFailure(pStmt);
@@ -1235,6 +1252,13 @@ static const void *columnName(
 ** Return the name of the Nth column of the result set returned by SQL
 ** statement pStmt.
 */
+void sqlite3_column_name_(sqlite3_stmt *pStmt, int N) __EXPORT_NAME(sqlite3_column_name) {
+  const char *result = sqlite3_column_name(pStmt, N);
+
+  set_result_ptr((char *)result);
+  set_result_size(strlen(result));
+}
+
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N){
   return columnName(pStmt, N, 0, COLNAME_NAME);
 }
@@ -1407,6 +1431,21 @@ static int bindText(
 /*
 ** Bind a blob value to an SQL statement variable.
 */
+
+int sqlite3_bind_blob_(
+  sqlite3_stmt *pStmt,
+  int i,
+  const void *zData,
+  int nData,
+  void (*xDel)(void*)
+) __EXPORT_NAME(sqlite3_bind_blob) {
+
+  const int result = sqlite3_bind_blob(pStmt, i, zData, nData, xDel);
+  free((void *)zData);
+
+  return result;
+}
+
 int sqlite3_bind_blob(
   sqlite3_stmt *pStmt, 
   int i, 
@@ -1483,7 +1522,21 @@ int sqlite3_bind_pointer(
   }
   return rc;
 }
-int sqlite3_bind_text( 
+
+int sqlite3_bind_text_(
+  sqlite3_stmt *pStmt,
+  int i,
+  const char *zData,
+  int nData,
+  void (*xDel)(void*)
+) __EXPORT_NAME(sqlite3_bind_text) {
+  const int result = sqlite3_bind_text(pStmt, i, zData, nData, xDel);
+  free((char *)zData);
+
+  return result;
+}
+
+int sqlite3_bind_text(
   sqlite3_stmt *pStmt, 
   int i, 
   const char *zData, 

@@ -16,6 +16,9 @@
 */
 #include "sqliteInt.h"
 
+extern char *RESULT_PTR;
+extern int RESULT_SIZE;
+
 #ifdef SQLITE_ENABLE_FTS3
 # include "fts3.h"
 #endif
@@ -2450,6 +2453,13 @@ int sqlite3TempInMemory(const sqlite3 *db){
 ** Return UTF-8 encoded English language explanation of the most recent
 ** error.
 */
+void sqlite3_errmsg_(sqlite3 *db) __EXPORT_NAME(sqlite3_errmsg) {
+  const char *result = sqlite3_errmsg(db);
+
+  set_result_ptr((char *)result);
+  set_result_size(strlen(result));
+}
+
 const char *sqlite3_errmsg(sqlite3 *db){
   const char *z;
   if( !db ){
@@ -3428,14 +3438,49 @@ int sqlite3_open(
   return openDatabase(zFilename, ppDb,
                       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0);
 }
+
+void sqlite3_open_v2_(
+  const char *filename,   /* Database filename (UTF-8) */
+  int filename_len,
+  int flags,              /* Flags */
+  const char *zVfs,        /* Name of VFS module to use */
+  int zVfs_len
+) __EXPORT_NAME(sqlite3_open_v2) {
+  char *new_filename = (char *)malloc(filename_len + 1);
+  memcpy(new_filename, filename, filename_len);
+  new_filename[filename_len] = '\x00';
+  free((void *)filename);
+
+  char *new_zVfs = 0;
+  if (zVfs_len != 0) {
+    char *new_zVfs = (char *) malloc(zVfs_len + 1);
+    memcpy(new_zVfs, zVfs, zVfs_len);
+    new_zVfs[zVfs_len] = '\x00';
+    free((void *) zVfs);
+  }
+
+  sqlite3 *ppDb;
+
+  const int ret_code = sqlite3_open_v2(new_filename, &ppDb, (unsigned int)flags, new_zVfs);
+  free(new_filename);
+  free(new_zVfs);
+
+  int *result = (int *)malloc(16);
+  result[0] = ret_code;
+  result[2] = (int)ppDb;
+
+  set_result_ptr((char *)result);
+}
+
 int sqlite3_open_v2(
   const char *filename,   /* Database filename (UTF-8) */
   sqlite3 **ppDb,         /* OUT: SQLite db handle */
   int flags,              /* Flags */
   const char *zVfs        /* Name of VFS module to use */
-){
+) {
   return openDatabase(filename, ppDb, (unsigned int)flags, zVfs);
 }
+
 
 #ifndef SQLITE_OMIT_UTF16
 /*

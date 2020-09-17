@@ -34,6 +34,12 @@
 #define SQLITE3_H
 #include <stdarg.h>     /* Needed for the definition of va_list */
 
+#define __EXPORT_NAME(name) \
+    __attribute__((export_name(#name)))
+
+void set_result_ptr(const char *ptr);
+void set_result_size(int size);
+
 /*
 ** Make sure we can call this stuff from C++.
 */
