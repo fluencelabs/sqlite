@@ -1157,7 +1157,7 @@ void sqlite3_column_text_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_colu
   const unsigned char *result = sqlite3_column_text(pStmt, i);
 
   set_result_ptr((char *)result);
-  set_result_size(strlen(result));
+  set_result_size(strlen((const char *)result));
 }
 
 const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int i){

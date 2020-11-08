@@ -792,7 +792,7 @@ void sqlite3_prepare_v2_(
   const char *pzTail;
 
   const int ret_code = sqlite3_prepare_v2(db, zSql, nBytes, &ppStmt, &pzTail);
-  free(zSql);
+  free((void *)zSql);
 
   int *result = (int *)malloc(3*8);
   result[0] = ret_code;

@@ -160,6 +160,7 @@ all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
+	/root/.cargo/bin/fce embed -i sqlite3.wasm -w sqlite3.wit
 
 .PRECIOUS: $(TARGET)
 
