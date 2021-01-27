@@ -28,4 +28,3 @@ int get_result_size(void) {
 const char *get_result_ptr() {
   return RESULT_PTR;
 }
-

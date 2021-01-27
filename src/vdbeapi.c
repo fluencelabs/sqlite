@@ -1442,14 +1442,22 @@ static int bindText(
 int sqlite3_bind_blob_(
   sqlite3_stmt *pStmt,
   int i,
-  const void *zData,
+  char *zData,
   int nData,
   void (*xDel)(void*)
 ) __EXPORT_NAME(sqlite3_bind_blob) {
-  char *copied_zData = malloc(nData);
-  memcpy(copied_zData, zData, nData);
+  const int copied_nData = nData / 8;
+  char *copied_zData = malloc(copied_nData);
 
-  const int result = sqlite3_bind_blob(pStmt, i, copied_zData, nData, xDel);
+  if (copied_zData == 0) {
+    return -1;
+  }
+
+  for (int char_id = 0; char_id < copied_nData; ++char_id) {
+    copied_zData[char_id] = zData[char_id * 8];
+  }
+
+  const int result = sqlite3_bind_blob(pStmt, i, copied_zData, copied_nData, 0);
 
   return result;
 }
