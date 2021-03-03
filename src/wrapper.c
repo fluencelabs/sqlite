@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include "sqliteInt.h"
 
-sqlite3 *state;
 const char *RESULT_PTR;
 int RESULT_SIZE;
 
