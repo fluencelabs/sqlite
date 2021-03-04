@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include "sqliteInt.h"
 
-sqlite3 *state;
 const char *RESULT_PTR;
 int RESULT_SIZE;
 
@@ -27,4 +26,9 @@ int get_result_size(void) {
 
 const char *get_result_ptr() {
   return RESULT_PTR;
+}
+
+int main() {
+  // the main purpose of this empty main is to initialize WASi subsystem
+  return 0;
 }

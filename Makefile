@@ -2,9 +2,9 @@ TARGET = sqlite3
 CC = /bin/clang
 SYSROOT = /share/wasi-sysroot
 TARGET_TRIPLE = wasm32-wasi
-CFLAGS = -nostartfiles -fvisibility=hidden
+CFLAGS = -fvisibility=hidden
 SDK = sdk/logger.h
-LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
+LDFLAGS = -Wl,--demangle,--allow-undefined
 EXPORT_FUNCS = \
 	--export=allocate,$\
 	--export=deallocate,$\
@@ -52,6 +52,8 @@ SQLITE_SRC = \
 	src/complete.c\
 	src/ctime.c\
 	src/date.c\
+	src/demo_os.c\
+	src/demo_vfs.c\
 	src/dbpage.c\
 	src/dbstat.c\
 	src/delete.c\
@@ -136,6 +138,7 @@ SQLITE_FLAGS = \
 	-DENABLE_LOG\
 	-DBUILD_sqlite\
 	-DNDEBUG\
+	-DSQLITE_OS_UNIX\
 	-DSQLITE_THREADSAFE=0\
 	-DHAVE_READLINE=0\
 	-DHAVE_EDITLINE=0\
