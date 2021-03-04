@@ -2,9 +2,9 @@ TARGET = sqlite3
 CC = /bin/clang
 SYSROOT = /share/wasi-sysroot
 TARGET_TRIPLE = wasm32-wasi
-CFLAGS = -nostartfiles -fvisibility=hidden
+CFLAGS = -fvisibility=hidden
 SDK = sdk/logger.h
-LDFLAGS = -Wl,--no-entry,--demangle,--allow-undefined
+LDFLAGS = -Wl,--demangle,--allow-undefined
 EXPORT_FUNCS = \
 	--export=allocate,$\
 	--export=deallocate,$\
