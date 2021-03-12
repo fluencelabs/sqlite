@@ -4,7 +4,7 @@ SYSROOT = /share/wasi-sysroot
 TARGET_TRIPLE = wasm32-wasi
 CFLAGS = -fvisibility=hidden
 SDK = sdk/logger.h
-LDFLAGS = -Wl,--demangle,--allow-undefined
+LDFLAGS = -Wl,--demangle,--allow-undefined,--no-gc-sections
 EXPORT_FUNCS = \
 	--export=allocate,$\
 	--export=deallocate,$\
@@ -123,6 +123,7 @@ SQLITE_SRC = \
 	src/vdbemem.c\
 	src/vdbesort.c\
 	src/vdbetrace.c\
+	src/version.c\
 	src/vtab.c\
 	src/wal.c\
 	src/walker.c\
@@ -162,8 +163,7 @@ default: $(TARGET)
 all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
-	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
-	/root/.cargo/bin/fce embed -i sqlite3.wasm -w sqlite3.wit
+	$(CC)  -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
 
 .PRECIOUS: $(TARGET)
 

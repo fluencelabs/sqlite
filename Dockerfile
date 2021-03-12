@@ -7,9 +7,9 @@ RUN apt-get update \
                        make \
                        cargo
 
-RUN curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-11/wasi-sdk-11.0-linux.tar.gz | tar xz --strip-components=1 -C /
+RUN curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-12/wasi-sdk-12.0-linux.tar.gz | tar xz --strip-components=1 -C /
 
-RUN cargo install fcli --version 0.1.12
+RUN cargo install fcli --version 0.2.0
 
 VOLUME /code
 WORKDIR /code
