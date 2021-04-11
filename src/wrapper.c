@@ -4,12 +4,23 @@
 const char *RESULT_PTR;
 int RESULT_SIZE;
 
+void* OBJECTS_TO_RELEASE[];
+unsigned int OBJECTS_TO_RELEASE_COUNT;
+
 void* allocate(size_t size) {
   return malloc(size + 1);
 }
 
-void deallocate(void *ptr, int size) {
-  free(ptr);
+void release_objects() {
+  for(unsigned int i = 0; i < OBJECTS_TO_RELEASE_COUNT; ++i) {
+    free(OBJECTS_TO_RELEASE[i]);
+  }
+
+  OBJECTS_TO_RELEASE_COUNT = 0;
+}
+
+void add_object_to_release(void *) {
+
 }
 
 void set_result_ptr(const char *ptr) {

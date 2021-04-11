@@ -3442,24 +3442,17 @@ void sqlite3_open_v2_(
   const char *zVfs,        /* Name of VFS module to use */
   int zVfs_len
 ) __EXPORT_NAME(sqlite3_open_v2) {
-  char *new_filename = (char *)malloc(filename_len + 1);
-  memcpy(new_filename, filename, filename_len);
-  new_filename[filename_len] = '\x00';
-  free((void *)filename);
-
-  char *new_zVfs = 0;
-  if (zVfs_len != 0) {
-    char *new_zVfs = (char *) malloc(zVfs_len + 1);
-    memcpy(new_zVfs, zVfs, zVfs_len);
-    new_zVfs[zVfs_len] = '\x00';
-    free((void *) zVfs);
-  }
+  // this strings were allocated by the allocate function that allocates 1 byte more for null character
+  filename[filename_len] = '\x00';
+  zVfs[zVfs_len] = '\x00';
 
   sqlite3 *ppDb;
 
   const int ret_code = sqlite3_open_v2(new_filename, &ppDb, (unsigned int)flags, new_zVfs);
-  free(new_filename);
-  free(new_zVfs);
+
+  // cleanup strings passed from the IT side
+  free(filename);
+  free(zVfs);
 
   int *result = (int *)malloc(16);
   result[0] = ret_code;

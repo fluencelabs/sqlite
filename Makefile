@@ -7,7 +7,7 @@ SDK = sdk/logger.h
 LDFLAGS = -Wl,--demangle,--allow-undefined
 EXPORT_FUNCS = \
 	--export=allocate,$\
-	--export=deallocate,$\
+	--export=release_objects,$\
 	--export=set_result_size,$\
 	--export=set_result_ptr,$\
 	--export=get_result_size,$\
@@ -163,7 +163,7 @@ all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
-	/root/.cargo/bin/fce embed -i sqlite3.wasm -w sqlite3.wit
+	# /root/.cargo/bin/fce embed_it -i sqlite3.wasm -w sqlite3.wit
 
 .PRECIOUS: $(TARGET)
 
