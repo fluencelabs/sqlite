@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-const char *RESULT_PTR;
+void *RESULT_PTR;
 int RESULT_SIZE;
 
 cvector_vector_type(void *) OBJECTS_TO_RELEASE;
@@ -27,7 +27,7 @@ void add_object_to_release(void *object) {
   cvector_push_back(OBJECTS_TO_RELEASE, object);
 }
 
-void set_result_ptr(const char *ptr) {
+void set_result_ptr(void *ptr) {
   RESULT_PTR = ptr;
 }
 
@@ -39,7 +39,7 @@ int get_result_size(void) {
   return RESULT_SIZE;
 }
 
-const char *get_result_ptr() {
+void *get_result_ptr() {
   return RESULT_PTR;
 }
 

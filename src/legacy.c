@@ -41,6 +41,7 @@ void sqlite3_exec_(
   const int ret_code = sqlite3_exec(db, zSql, xCallback, pArg, &pzErrMsg);
 
   free(zSql);
+
   int *result = malloc(3*8);
   result[0] = ret_code;
   result[1] = 0;
@@ -49,8 +50,10 @@ void sqlite3_exec_(
   result[4] = strlen(pzErrMsg);
   result[5] = 0;
 
+  // errmsg should be managed by user
+  add_object_to_release((void *) pzErrMsg);
   add_object_to_release((void *) result);
-  set_result_ptr((char *)result);
+  set_result_ptr((void *) result);
 }
 
 int sqlite3_exec(

@@ -1113,7 +1113,8 @@ void sqlite3_column_blob_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_colu
    const char *blob = sqlite3_column_blob(pStmt, i);
    int blob_len = sqlite3_column_bytes(pStmt, i);
 
-   set_result_ptr((char *)blob);
+   // blob is managed by SQLite itself
+   set_result_ptr((void *)blob);
    set_result_size(blob_len);
 }
 
@@ -1157,7 +1158,8 @@ void sqlite3_column_text_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_colu
   const unsigned char *text = sqlite3_column_text(pStmt, i);
   const unsigned int text_len = sqlite3_column_bytes(pStmt, i);
 
-  set_result_ptr((char *)text);
+  // test is managed by SQLite itself
+  set_result_ptr((void *) text);
   set_result_size(text_len);
 }
 
@@ -1256,8 +1258,8 @@ static const void *columnName(
 void sqlite3_column_name_(sqlite3_stmt *pStmt, int N) __EXPORT_NAME(sqlite3_column_name) {
   const char *result = sqlite3_column_name(pStmt, N);
 
-  add_object_to_release((void *) result);
-  set_result_ptr((char *)result);
+  // result is managed by SQLite itself
+  set_result_ptr((void *)result);
   set_result_size(strlen(result));
 }
 

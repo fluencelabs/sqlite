@@ -2452,8 +2452,8 @@ int sqlite3TempInMemory(const sqlite3 *db){
 void sqlite3_errmsg_(sqlite3 *db) __EXPORT_NAME(sqlite3_errmsg) {
   const char *result = sqlite3_errmsg(db);
 
-  add_object_to_release((void *) result);
-  set_result_ptr((char *)result);
+  // result is managed by SQLite itself
+  set_result_ptr((void *) result);
   set_result_size(strlen(result));
 }
 
@@ -3460,7 +3460,7 @@ void sqlite3_open_v2_(
   result[2] = (int)ppDb;
 
   add_object_to_release((void *) result);
-  set_result_ptr((char *)result);
+  set_result_ptr((void *)result);
 }
 
 int sqlite3_open_v2(
