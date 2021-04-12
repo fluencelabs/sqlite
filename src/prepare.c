@@ -788,11 +788,11 @@ void sqlite3_prepare_v2_(
   const char *zSql,         /* UTF-8 encoded SQL statement. */
   int nBytes                /* Length of zSql in bytes. */
 ) __EXPORT_NAME(sqlite3_prepare_v2) {
-  sqlite3_stmt *ppStmt;
-  const char *pzTail;
+  sqlite3_stmt *ppStmt = NULL;
+  const char *pzTail = NULL;
 
   const int ret_code = sqlite3_prepare_v2(db, zSql, nBytes, &ppStmt, &pzTail);
-  free((void *)zSql);
+  free((void *) zSql);
 
   int *result = (int *)malloc(3*8);
   result[0] = ret_code;
@@ -800,7 +800,8 @@ void sqlite3_prepare_v2_(
   result[4] = (int)pzTail;
   result[5] = strlen(pzTail);
 
-  set_result_ptr((char *)result);
+  add_object_to_release((void *) result);
+  set_result_ptr((void *) result);
 }
 
 int sqlite3_prepare_v2(

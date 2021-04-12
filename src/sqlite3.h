@@ -37,9 +37,6 @@
 #define __EXPORT_NAME(name) \
     __attribute__((export_name(#name)))
 
-void set_result_ptr(const char *ptr);
-void set_result_size(int size);
-
 /*
 ** Make sure we can call this stuff from C++.
 */

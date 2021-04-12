@@ -2452,7 +2452,8 @@ int sqlite3TempInMemory(const sqlite3 *db){
 void sqlite3_errmsg_(sqlite3 *db) __EXPORT_NAME(sqlite3_errmsg) {
   const char *result = sqlite3_errmsg(db);
 
-  set_result_ptr((char *)result);
+  // result is managed by SQLite itself
+  set_result_ptr((void *) result);
   set_result_size(strlen(result));
 }
 
@@ -3436,36 +3437,29 @@ int sqlite3_open(
 }
 
 void sqlite3_open_v2_(
-  const char *filename,   /* Database filename (UTF-8) */
+  char *filename,         /* Database filename (UTF-8) */
   int filename_len,
   int flags,              /* Flags */
-  const char *zVfs,        /* Name of VFS module to use */
+  char *zVfs,             /* Name of VFS module to use */
   int zVfs_len
 ) __EXPORT_NAME(sqlite3_open_v2) {
-  char *new_filename = (char *)malloc(filename_len + 1);
-  memcpy(new_filename, filename, filename_len);
-  new_filename[filename_len] = '\x00';
-  free((void *)filename);
-
-  char *new_zVfs = 0;
-  if (zVfs_len != 0) {
-    char *new_zVfs = (char *) malloc(zVfs_len + 1);
-    memcpy(new_zVfs, zVfs, zVfs_len);
-    new_zVfs[zVfs_len] = '\x00';
-    free((void *) zVfs);
-  }
+  filename = handle_input_string(filename, filename_len);
+  zVfs = handle_input_string(zVfs, zVfs_len);
 
   sqlite3 *ppDb;
 
-  const int ret_code = sqlite3_open_v2(new_filename, &ppDb, (unsigned int)flags, new_zVfs);
-  free(new_filename);
-  free(new_zVfs);
+  const int ret_code = sqlite3_open_v2(filename, &ppDb, (unsigned int)flags, zVfs);
+
+  // cleanup strings passed from the IT side
+  free(filename);
+  free(zVfs);
 
   int *result = (int *)malloc(16);
   result[0] = ret_code;
   result[2] = (int)ppDb;
 
-  set_result_ptr((char *)result);
+  add_object_to_release((void *) result);
+  set_result_ptr((void *)result);
 }
 
 int sqlite3_open_v2(

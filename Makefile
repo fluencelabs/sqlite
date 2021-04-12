@@ -7,7 +7,7 @@ SDK = sdk/logger.h
 LDFLAGS = -Wl,--demangle,--allow-undefined
 EXPORT_FUNCS = \
 	--export=allocate,$\
-	--export=deallocate,$\
+	--export=release_objects,$\
 	--export=set_result_size,$\
 	--export=set_result_ptr,$\
 	--export=get_result_size,$\
@@ -29,7 +29,7 @@ EXPORT_FUNCS = \
 	--export=sqlite3_bind_blob_,$\
 	--export=sqlite3_bind_double,$\
 	--export=sqlite3_bind_int64,$\
-	--export=sqlite3_bind_text_,$\
+	--export=sqlite3_bind_text,$\
 	--export=sqlite3_bind_null,$\
 	--export=sqlite3_column_count,$\
 	--export=sqlite3_column_double,$\
@@ -154,7 +154,8 @@ SQLITE_FLAGS = \
 	-DSQLITE_ENABLE_OFFSET_SQL_FUNC\
 	-DSQLITE_ENABLE_DESERIALIZE\
 	-DSQLITE_INTROSPECTION_PRAGMAS\
-	-DSQLITE_OMIT_POPEN
+	-DSQLITE_OMIT_POPEN\
+	-DCVECTOR_LOGARITHMIC_GROWTH
 
 .PHONY: default all clean
 
@@ -163,7 +164,7 @@ all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
-	/root/.cargo/bin/fce embed -i sqlite3.wasm -w sqlite3.wit
+	# /root/.cargo/bin/fce embed_it -i sqlite3.wasm -w sqlite3.wit
 
 .PRECIOUS: $(TARGET)
 

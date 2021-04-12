@@ -4908,4 +4908,13 @@ void sqlite3VectorErrorMsg(Parse*, Expr*);
 const char **sqlite3CompileOptions(int *pnOpt);
 #endif
 
+#ifndef __sqlite_unmodified_upstram
+void add_object_to_release(void *object);
+
+void set_result_ptr(void *ptr);
+void set_result_size(int size);
+
+char *handle_input_string(char *str, int len);
+#endif
+
 #endif /* SQLITEINT_H */
