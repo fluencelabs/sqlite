@@ -3443,9 +3443,8 @@ void sqlite3_open_v2_(
   char *zVfs,             /* Name of VFS module to use */
   int zVfs_len
 ) __EXPORT_NAME(sqlite3_open_v2) {
-  // this strings were allocated by the allocate function that allocates 1 byte more for null character
-  filename[filename_len] = '\x00';
-  zVfs[zVfs_len] = '\x00';
+  filename = handle_input_string(filename, filename_len);
+  zVfs = handle_input_string(zVfs, zVfs_len);
 
   sqlite3 *ppDb;
 

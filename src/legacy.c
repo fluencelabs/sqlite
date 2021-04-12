@@ -35,7 +35,7 @@ void sqlite3_exec_(
   sqlite3_callback xCallback, /* Invoke this callback routine */
   void *pArg                  /* First argument to xCallback() */
 ) __EXPORT_NAME(sqlite3_exec) {
-  zSql[zSql_len] = '\x00';
+  zSql = handle_input_string(zSql, zSql_len);
 
   char *pzErrMsg = 0;
   const int ret_code = sqlite3_exec(db, zSql, xCallback, pArg, &pzErrMsg);

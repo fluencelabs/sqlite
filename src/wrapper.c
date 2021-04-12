@@ -43,6 +43,17 @@ void *get_result_ptr() {
   return RESULT_PTR;
 }
 
+char *handle_input_string(char *str, int len) {
+  if (len == 0) {
+    free(str);
+    return NULL;
+  }
+
+  // this strings are supposed to be allocated by the allocate function, which allocates 1 byte more for null character
+  str[len] = '\x00';
+  return str;
+}
+
 int main() {
   // the main purpose of this empty main is to initialize WASI subsystem
   return 0;
