@@ -19,7 +19,7 @@ void release_objects() {
   OBJECTS_TO_RELEASE_COUNT = 0;
 }
 
-void add_object_to_release(void *) {
+void add_object_to_release(void *object) {
 
 }
 

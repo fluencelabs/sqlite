@@ -35,15 +35,12 @@ void sqlite3_exec_(
   sqlite3_callback xCallback, /* Invoke this callback routine */
   void *pArg                  /* First argument to xCallback() */
 ) __EXPORT_NAME(sqlite3_exec) {
-  char *new_zSql = (char *) malloc(zSql_len + 1);
-  memcpy(new_zSql, zSql, zSql_len);
-  new_zSql[zSql_len] = 0;
-  free((void *)zSql);
+  zSql[zSql_len] = '\x00';
 
   char *pzErrMsg = 0;
   const int ret_code = sqlite3_exec(db, new_zSql, xCallback, pArg, &pzErrMsg);
 
-  free(new_zSql);
+  free(zSql);
   int *result = malloc(3*8);
   result[0] = ret_code;
   result[1] = 0;
@@ -52,6 +49,7 @@ void sqlite3_exec_(
   result[4] = strlen(pzErrMsg);
   result[5] = 0;
 
+  add_object_to_release((void *) result);
   set_result_ptr((char *)result);
 }
 

@@ -1113,10 +1113,7 @@ void sqlite3_column_blob_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_colu
    const char *blob = sqlite3_column_blob(pStmt, i);
    int blob_len = sqlite3_column_bytes(pStmt, i);
 
-   unsigned char *copied_result = malloc(blob_len);
-   memcpy(copied_result, blob, blob_len);
-
-   set_result_ptr((char *)copied_result);
+   set_result_ptr((char *)blob);
    set_result_size(blob_len);
 }
 
@@ -1160,10 +1157,7 @@ void sqlite3_column_text_(sqlite3_stmt *pStmt, int i) __EXPORT_NAME(sqlite3_colu
   const unsigned char *text = sqlite3_column_text(pStmt, i);
   const unsigned int text_len = sqlite3_column_bytes(pStmt, i);
 
-  unsigned char *copied_text = malloc(text_len);
-  memcpy(copied_text, text, text_len);
-
-  set_result_ptr((char *)copied_text);
+  set_result_ptr((char *)text);
   set_result_size(text_len);
 }
 
@@ -1262,6 +1256,7 @@ static const void *columnName(
 void sqlite3_column_name_(sqlite3_stmt *pStmt, int N) __EXPORT_NAME(sqlite3_column_name) {
   const char *result = sqlite3_column_name(pStmt, N);
 
+  add_object_to_release((void *) result);
   set_result_ptr((char *)result);
   set_result_size(strlen(result));
 }
@@ -1456,6 +1451,7 @@ int sqlite3_bind_blob_(
   for (int char_id = 0; char_id < copied_nData; ++char_id) {
     copied_zData[char_id] = zData[char_id * 8];
   }
+  free(zData);
 
   const int result = sqlite3_bind_blob(pStmt, i, copied_zData, copied_nData, 0);
 
@@ -1537,21 +1533,6 @@ int sqlite3_bind_pointer(
     xDestructor(pPtr);
   }
   return rc;
-}
-
-int sqlite3_bind_text_(
-  sqlite3_stmt *pStmt,
-  int i,
-  const char *zData,
-  int nData,
-  void (*xDel)(void*)
-) __EXPORT_NAME(sqlite3_bind_text) {
-  char *copied_zData = malloc(nData);
-  memcpy(copied_zData, zData, nData);
-
-  const int result = sqlite3_bind_text(pStmt, i, copied_zData, nData, xDel);
-
-  return result;
 }
 
 int sqlite3_bind_text(
