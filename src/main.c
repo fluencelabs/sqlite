@@ -3437,10 +3437,10 @@ int sqlite3_open(
 }
 
 void sqlite3_open_v2_(
-  const char *filename,   /* Database filename (UTF-8) */
+  char *filename,         /* Database filename (UTF-8) */
   int filename_len,
   int flags,              /* Flags */
-  const char *zVfs,        /* Name of VFS module to use */
+  char *zVfs,             /* Name of VFS module to use */
   int zVfs_len
 ) __EXPORT_NAME(sqlite3_open_v2) {
   // this strings were allocated by the allocate function that allocates 1 byte more for null character
@@ -3449,7 +3449,7 @@ void sqlite3_open_v2_(
 
   sqlite3 *ppDb;
 
-  const int ret_code = sqlite3_open_v2(new_filename, &ppDb, (unsigned int)flags, new_zVfs);
+  const int ret_code = sqlite3_open_v2(filename, &ppDb, (unsigned int)flags, zVfs);
 
   // cleanup strings passed from the IT side
   free(filename);

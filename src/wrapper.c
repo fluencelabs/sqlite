@@ -1,26 +1,30 @@
-#include <stdlib.h>
 #include "sqliteInt.h"
+#include "../cvector/cvector.h"
+
+#include <stdlib.h>
 
 const char *RESULT_PTR;
 int RESULT_SIZE;
 
-void* OBJECTS_TO_RELEASE[];
-unsigned int OBJECTS_TO_RELEASE_COUNT;
+cvector_vector_type(void *) OBJECTS_TO_RELEASE;
 
 void* allocate(size_t size) {
+  // this +1 is needed to append then zero byte to strings passing to this module.
   return malloc(size + 1);
 }
 
 void release_objects() {
-  for(unsigned int i = 0; i < OBJECTS_TO_RELEASE_COUNT; ++i) {
-    free(OBJECTS_TO_RELEASE[i]);
-  }
+  const unsigned int objects_count = cvector_size(OBJECTS_TO_RELEASE);
+  for (unsigned int obj_id = objects_count; obj_id > 0; --obj_id) {
+    void *object = OBJECTS_TO_RELEASE[obj_id-1];
+    free(object);
 
-  OBJECTS_TO_RELEASE_COUNT = 0;
+    cvector_pop_back(OBJECTS_TO_RELEASE);
+  }
 }
 
 void add_object_to_release(void *object) {
-
+  cvector_push_back(OBJECTS_TO_RELEASE, object);
 }
 
 void set_result_ptr(const char *ptr) {
@@ -40,6 +44,6 @@ const char *get_result_ptr() {
 }
 
 int main() {
-  // the main purpose of this empty main is to initialize WASi subsystem
+  // the main purpose of this empty main is to initialize WASI subsystem
   return 0;
 }

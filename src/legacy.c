@@ -30,7 +30,7 @@
 */
 void sqlite3_exec_(
   sqlite3 *db,                /* The database on which the SQL executes */
-  char *zSql,           /* The SQL to be executed */
+  char *zSql,                 /* The SQL to be executed */
   int zSql_len,
   sqlite3_callback xCallback, /* Invoke this callback routine */
   void *pArg                  /* First argument to xCallback() */
@@ -38,7 +38,7 @@ void sqlite3_exec_(
   zSql[zSql_len] = '\x00';
 
   char *pzErrMsg = 0;
-  const int ret_code = sqlite3_exec(db, new_zSql, xCallback, pArg, &pzErrMsg);
+  const int ret_code = sqlite3_exec(db, zSql, xCallback, pArg, &pzErrMsg);
 
   free(zSql);
   int *result = malloc(3*8);
