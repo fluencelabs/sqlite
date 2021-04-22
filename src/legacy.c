@@ -28,6 +28,7 @@
 ** argument to xCallback().  If xCallback=NULL then no callback
 ** is invoked, even for queries.
 */
+#ifndef __sqlite_unmodified_upstream
 void sqlite3_exec_(
   sqlite3 *db,                /* The database on which the SQL executes */
   char *zSql,                 /* The SQL to be executed */
@@ -40,21 +41,20 @@ void sqlite3_exec_(
   char *pzErrMsg = 0;
   const int ret_code = sqlite3_exec(db, zSql, xCallback, pArg, &pzErrMsg);
 
+  // free the string passed from the IT side
   free(zSql);
 
-  int *result = malloc(3*8);
-  result[0] = ret_code;
-  result[1] = 0;
-  result[2] = (int) pzErrMsg;
-  result[3] = 0;
-  result[4] = strlen(pzErrMsg);
-  result[5] = 0;
+  unsigned char *result = (unsigned char*)malloc(3*4);
+  write_le_int(result, 0, (unsigned int)ret_code);
+  write_le_int(result, 4, (unsigned int)pzErrMsg);
+  write_le_int(result, 8, (unsigned int)strlen(pzErrMsg));
 
   // errmsg should be managed by user
   add_object_to_release((void *) pzErrMsg);
   add_object_to_release((void *) result);
   set_result_ptr((void *) result);
 }
+#endif
 
 int sqlite3_exec(
   sqlite3 *db,                /* The database on which the SQL executes */

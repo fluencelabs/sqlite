@@ -783,6 +783,7 @@ int sqlite3_prepare(
   return rc;
 }
 
+#ifndef __sqlite_unmodified_upstream
 void sqlite3_prepare_v2_(
   sqlite3 *db,              /* Database handle. */
   const char *zSql,         /* UTF-8 encoded SQL statement. */
@@ -792,17 +793,20 @@ void sqlite3_prepare_v2_(
   const char *pzTail = NULL;
 
   const int ret_code = sqlite3_prepare_v2(db, zSql, nBytes, &ppStmt, &pzTail);
+
+  // free the string passed from the IT side
   free((void *) zSql);
 
-  int *result = (int *)malloc(3*8);
-  result[0] = ret_code;
-  result[2] = (int)ppStmt;
-  result[4] = (int)pzTail;
-  result[5] = strlen(pzTail);
+  unsigned char *result = (unsigned char*)malloc(4 * 4);
+  write_le_int(result, 0, (unsigned int)ret_code);
+  write_le_int(result, 4, (unsigned int)ppStmt);
+  write_le_int(result, 8, (unsigned int)pzTail);
+  write_le_int(result, 12, (unsigned int)strlen(pzTail));
 
   add_object_to_release((void *) result);
   set_result_ptr((void *) result);
 }
+#endif
 
 int sqlite3_prepare_v2(
   sqlite3 *db,              /* Database handle. */

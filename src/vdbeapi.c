@@ -1255,6 +1255,7 @@ static const void *columnName(
 ** Return the name of the Nth column of the result set returned by SQL
 ** statement pStmt.
 */
+#ifndef __sqlite_unmodified_upstream
 void sqlite3_column_name_(sqlite3_stmt *pStmt, int N) __EXPORT_NAME(sqlite3_column_name) {
   const char *result = sqlite3_column_name(pStmt, N);
 
@@ -1262,6 +1263,7 @@ void sqlite3_column_name_(sqlite3_stmt *pStmt, int N) __EXPORT_NAME(sqlite3_colu
   set_result_ptr((void *)result);
   set_result_size(strlen(result));
 }
+#endif
 
 const char *sqlite3_column_name(sqlite3_stmt *pStmt, int N){
   return columnName(pStmt, N, 0, COLNAME_NAME);
@@ -1435,31 +1437,6 @@ static int bindText(
 /*
 ** Bind a blob value to an SQL statement variable.
 */
-
-int sqlite3_bind_blob_(
-  sqlite3_stmt *pStmt,
-  int i,
-  char *zData,
-  int nData,
-  void (*xDel)(void*)
-) __EXPORT_NAME(sqlite3_bind_blob) {
-  const int copied_nData = nData / 8;
-  char *copied_zData = malloc(copied_nData);
-
-  if (copied_zData == 0) {
-    return -1;
-  }
-
-  for (int char_id = 0; char_id < copied_nData; ++char_id) {
-    copied_zData[char_id] = zData[char_id * 8];
-  }
-  free(zData);
-
-  const int result = sqlite3_bind_blob(pStmt, i, copied_zData, copied_nData, 0);
-
-  return result;
-}
-
 int sqlite3_bind_blob(
   sqlite3_stmt *pStmt, 
   int i, 

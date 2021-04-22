@@ -54,6 +54,13 @@ char *handle_input_string(char *str, int len) {
   return str;
 }
 
+void write_le_int(unsigned char *array, unsigned int offset, unsigned int value) {
+  array[offset] = value & 0xff;
+  array[offset + 1] = (value >> 8) & 0xff;
+  array[offset + 2] = (value >> 16) & 0xff;
+  array[offset + 3] = (value >> 24) & 0xff;
+}
+
 int main() {
   // the main purpose of this empty main is to initialize WASI subsystem
   return 0;
