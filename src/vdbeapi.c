@@ -1447,11 +1447,12 @@ int sqlite3_bind_blob(
 #ifdef SQLITE_ENABLE_API_ARMOR
   if( nData<0 ) return SQLITE_MISUSE_BKPT;
 #endif
-#ifndef __sqlite_unmodified_upstream
-  return bindText(pStmt, i, zData, nData, xDel, 0);
-#else
+
+#ifdef __sqlite_unmodified_upstream
   // xDel is a custom deallocator, due to our IT architecture it can't be provided from other modules.
   return bindText(pStmt, i, zData, nData, free, 0);
+#else
+  return bindText(pStmt, i, zData, nData, xDel, 0);
 #endif
 }
 int sqlite3_bind_blob64(
@@ -1526,7 +1527,7 @@ int sqlite3_bind_text(
   int nData, 
   void (*xDel)(void*)
 ){
-#ifndef __sqlite_unmodified_upstream
+#ifdef __sqlite_unmodified_upstream
   return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
 #else
   // xDel is a custom deallocator, due to our IT architecture it can't be provided from other modules.
