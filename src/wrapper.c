@@ -8,7 +8,11 @@ int RESULT_SIZE;
 
 cvector_vector_type(void *) OBJECTS_TO_RELEASE;
 
-void* allocate(size_t size) {
+void* allocate(size_t size, size_t _type_tag) {
+  if (size == 0 || size + 1 == 0) {
+    return 0;
+  }
+
   // this +1 is needed to append then zero byte to strings passing to this module.
   return malloc(size + 1);
 }
