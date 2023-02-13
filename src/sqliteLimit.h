@@ -60,11 +60,7 @@
 ** The maximum depth of an expression tree. This is limited to 
 ** some extent by SQLITE_MAX_SQL_LENGTH. But sometime you might 
 ** want to place more severe limits on the complexity of an 
-** expression.
-**
-** A value of 0 used to mean that the limit was not enforced.
-** But that is no longer true.  The limit is now strictly enforced
-** at all times.
+** expression. A value of 0 means that there is no limit.
 */
 #ifndef SQLITE_MAX_EXPR_DEPTH
 # define SQLITE_MAX_EXPR_DEPTH 1000
@@ -131,9 +127,12 @@
 
 /*
 ** The maximum value of a ?nnn wildcard that the parser will accept.
+** If the value exceeds 32767 then extra space is required for the Expr
+** structure.  But otherwise, we believe that the number can be as large
+** as a signed 32-bit integer can hold.
 */
 #ifndef SQLITE_MAX_VARIABLE_NUMBER
-# define SQLITE_MAX_VARIABLE_NUMBER 999
+# define SQLITE_MAX_VARIABLE_NUMBER 32766
 #endif
 
 /* Maximum page size.  The upper bound on this value is 65536.  This a limit

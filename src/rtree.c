@@ -62,8 +62,13 @@
 #else
   #include "sqlite3.h"
 #endif
+int sqlite3GetToken(const unsigned char*,int*); /* In the SQLite core */
 
-#ifndef SQLITE_AMALGAMATION
+/*
+** If building separately, we will need some setup that is normally
+** found in sqliteInt.h
+*/
+#if !defined(SQLITE_AMALGAMATION)
 #include "sqlite3rtree.h"
 typedef sqlite3_int64 i64;
 typedef sqlite3_uint64 u64;
@@ -76,11 +81,25 @@ typedef unsigned int u32;
 #if defined(NDEBUG) && defined(SQLITE_DEBUG)
 # undef NDEBUG
 #endif
+#if defined(SQLITE_COVERAGE_TEST) || defined(SQLITE_MUTATION_TEST)
+# define SQLITE_OMIT_AUXILIARY_SAFETY_CHECKS 1
 #endif
+#if defined(SQLITE_OMIT_AUXILIARY_SAFETY_CHECKS)
+# define ALWAYS(X)      (1)
+# define NEVER(X)       (0)
+#elif !defined(NDEBUG)
+# define ALWAYS(X)      ((X)?1:(assert(0),0))
+# define NEVER(X)       ((X)?(assert(0),1):0)
+#else
+# define ALWAYS(X)      (X)
+# define NEVER(X)       (X)
+#endif
+#endif /* !defined(SQLITE_AMALGAMATION) */
 
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
 
 /*  The following macro is used to suppress compiler warnings.
 */
@@ -133,7 +152,9 @@ struct Rtree {
   u8 nBytesPerCell;           /* Bytes consumed per cell */
   u8 inWrTrans;               /* True if inside write transaction */
   u8 nAux;                    /* # of auxiliary columns in %_rowid */
+#ifdef SQLITE_ENABLE_GEOPOLY
   u8 nAuxNotNull;             /* Number of initial not-null aux columns */
+#endif
 #ifdef SQLITE_DEBUG
   u8 bCorrupt;                /* Shadow table corruption detected */
 #endif
@@ -325,6 +346,12 @@ struct RtreeConstraint {
 #define RTREE_MATCH 0x46  /* F: Old-style sqlite3_rtree_geometry_callback() */
 #define RTREE_QUERY 0x47  /* G: New-style sqlite3_rtree_query_callback() */
 
+/* Special operators available only on cursors.  Needs to be consecutive
+** with the normal values above, but must be less than RTREE_MATCH.  These
+** are used in the cursor for contraints such as x=NULL (RTREE_FALSE) or
+** x<'xyz' (RTREE_TRUE) */
+#define RTREE_TRUE  0x3f  /* ? */
+#define RTREE_FALSE 0x40  /* @ */
 
 /* 
 ** An rtree structure node.
@@ -409,7 +436,29 @@ struct RtreeMatchArg {
 ** it is not, make it a no-op.
 */
 #ifndef SQLITE_AMALGAMATION
-# define testcase(X)
+# if defined(SQLITE_COVERAGE_TEST) || defined(SQLITE_DEBUG)
+    unsigned int sqlite3RtreeTestcase = 0;
+#   define testcase(X)  if( X ){ sqlite3RtreeTestcase += __LINE__; }
+# else
+#   define testcase(X)
+# endif
+#endif
+
+/*
+** Make sure that the compiler intrinsics we desire are enabled when
+** compiling with an appropriate version of MSVC unless prevented by
+** the SQLITE_DISABLE_INTRINSIC define.
+*/
+#if !defined(SQLITE_DISABLE_INTRINSIC)
+#  if defined(_MSC_VER) && _MSC_VER>=1400
+#    if !defined(_WIN32_WCE)
+#      include <intrin.h>
+#      pragma intrinsic(_byteswap_ulong)
+#      pragma intrinsic(_byteswap_uint64)
+#    else
+#      include <cmnintrin.h>
+#    endif
+#  endif
 #endif
 
 /*
@@ -452,7 +501,7 @@ static int readInt16(u8 *p){
   return (p[0]<<8) + p[1];
 }
 static void readCoord(u8 *p, RtreeCoord *pCoord){
-  assert( ((((char*)p) - (char*)0)&3)==0 );  /* p is always 4-byte aligned */
+  assert( (((sqlite3_uint64)p)&3)==0 );  /* p is always 4-byte aligned */
 #if SQLITE_BYTEORDER==1234 && MSVC_VERSION>=1300
   pCoord->u = _byteswap_ulong(*(u32*)p);
 #elif SQLITE_BYTEORDER==1234 && GCC_VERSION>=4003000
@@ -506,7 +555,7 @@ static void writeInt16(u8 *p, int i){
 }
 static int writeCoord(u8 *p, RtreeCoord *pCoord){
   u32 i;
-  assert( ((((char*)p) - (char*)0)&3)==0 );  /* p is always 4-byte aligned */
+  assert( (((sqlite3_uint64)p)&3)==0 );  /* p is always 4-byte aligned */
   assert( sizeof(RtreeCoord)==4 );
   assert( sizeof(u32)==4 );
 #if SQLITE_BYTEORDER==1234 && GCC_VERSION>=4003000
@@ -642,18 +691,6 @@ static void nodeBlobReset(Rtree *pRtree){
 }
 
 /*
-** Check to see if pNode is the same as pParent or any of the parents
-** of pParent.
-*/
-static int nodeInParentChain(const RtreeNode *pNode, const RtreeNode *pParent){
-  do{
-    if( pNode==pParent ) return 1;
-    pParent = pParent->pParent;
-  }while( pParent );
-  return 0;
-}
-
-/*
 ** Obtain a reference to an r-tree node.
 */
 static int nodeAcquire(
@@ -669,14 +706,9 @@ static int nodeAcquire(
   ** increase its reference count and return it.
   */
   if( (pNode = nodeHashLookup(pRtree, iNode))!=0 ){
-    assert( !pParent || !pNode->pParent || pNode->pParent==pParent );
-    if( pParent && !pNode->pParent ){
-      if( nodeInParentChain(pNode, pParent) ){
-        RTREE_IS_CORRUPT(pRtree);
-        return SQLITE_CORRUPT_VTAB;
-      }
-      pParent->nRef++;
-      pNode->pParent = pParent;
+    if( pParent && pParent!=pNode->pParent ){
+      RTREE_IS_CORRUPT(pRtree);
+      return SQLITE_CORRUPT_VTAB;
     }
     pNode->nRef++;
     *ppNode = pNode;
@@ -732,7 +764,7 @@ static int nodeAcquire(
   ** are the leaves, and so on. If the depth as specified on the root node
   ** is greater than RTREE_MAX_DEPTH, the r-tree structure must be corrupt.
   */
-  if( pNode && iNode==1 ){
+  if( rc==SQLITE_OK && pNode && iNode==1 ){
     pRtree->iDepth = readInt16(pNode->zData);
     if( pRtree->iDepth>RTREE_MAX_DEPTH ){
       rc = SQLITE_CORRUPT_VTAB;
@@ -1056,9 +1088,12 @@ static int rtreeOpen(sqlite3_vtab *pVTab, sqlite3_vtab_cursor **ppCursor){
 
 
 /*
-** Free the RtreeCursor.aConstraint[] array and its contents.
+** Reset a cursor back to its initial state.
 */
-static void freeCursorConstraints(RtreeCursor *pCsr){
+static void resetCursor(RtreeCursor *pCsr){
+  Rtree *pRtree = (Rtree *)(pCsr->base.pVtab);
+  int ii;
+  sqlite3_stmt *pStmt;
   if( pCsr->aConstraint ){
     int i;                        /* Used to iterate through constraint array */
     for(i=0; i<pCsr->nConstraint; i++){
@@ -1071,6 +1106,13 @@ static void freeCursorConstraints(RtreeCursor *pCsr){
     sqlite3_free(pCsr->aConstraint);
     pCsr->aConstraint = 0;
   }
+  for(ii=0; ii<RTREE_CACHE_SZ; ii++) nodeRelease(pRtree, pCsr->aNode[ii]);
+  sqlite3_free(pCsr->aPoint);
+  pStmt = pCsr->pReadAux;
+  memset(pCsr, 0, sizeof(RtreeCursor));
+  pCsr->base.pVtab = (sqlite3_vtab*)pRtree;
+  pCsr->pReadAux = pStmt;
+
 }
 
 /* 
@@ -1078,13 +1120,10 @@ static void freeCursorConstraints(RtreeCursor *pCsr){
 */
 static int rtreeClose(sqlite3_vtab_cursor *cur){
   Rtree *pRtree = (Rtree *)(cur->pVtab);
-  int ii;
   RtreeCursor *pCsr = (RtreeCursor *)cur;
   assert( pRtree->nCursor>0 );
-  freeCursorConstraints(pCsr);
+  resetCursor(pCsr);
   sqlite3_finalize(pCsr->pReadAux);
-  sqlite3_free(pCsr->aPoint);
-  for(ii=0; ii<RTREE_CACHE_SZ; ii++) nodeRelease(pRtree, pCsr->aNode[ii]);
   sqlite3_free(pCsr);
   pRtree->nCursor--;
   nodeBlobReset(pRtree);
@@ -1242,23 +1281,35 @@ static void rtreeNonleafConstraint(
   pCellData += 8 + 4*(p->iCoord&0xfe);
 
   assert(p->op==RTREE_LE || p->op==RTREE_LT || p->op==RTREE_GE 
-      || p->op==RTREE_GT || p->op==RTREE_EQ );
-  assert( ((((char*)pCellData) - (char*)0)&3)==0 );  /* 4-byte aligned */
+      || p->op==RTREE_GT || p->op==RTREE_EQ || p->op==RTREE_TRUE
+      || p->op==RTREE_FALSE );
+  assert( (((sqlite3_uint64)pCellData)&3)==0 );  /* 4-byte aligned */
   switch( p->op ){
-    case RTREE_LE:
-    case RTREE_LT:
+    case RTREE_TRUE:  return;   /* Always satisfied */
+    case RTREE_FALSE: break;    /* Never satisfied */
     case RTREE_EQ:
       RTREE_DECODE_COORD(eInt, pCellData, val);
       /* val now holds the lower bound of the coordinate pair */
+      if( p->u.rValue>=val ){
+        pCellData += 4;
+        RTREE_DECODE_COORD(eInt, pCellData, val);
+        /* val now holds the upper bound of the coordinate pair */
+        if( p->u.rValue<=val ) return;
+      }
+      break;
+    case RTREE_LE:
+    case RTREE_LT:
+      RTREE_DECODE_COORD(eInt, pCellData, val);
+      /* val now holds the lower bound of the coordinate pair */
       if( p->u.rValue>=val ) return;
-      if( p->op!=RTREE_EQ ) break;  /* RTREE_LE and RTREE_LT end here */
-      /* Fall through for the RTREE_EQ case */
+      break;
 
-    default: /* RTREE_GT or RTREE_GE,  or fallthrough of RTREE_EQ */
+    default:
       pCellData += 4;
       RTREE_DECODE_COORD(eInt, pCellData, val);
       /* val now holds the upper bound of the coordinate pair */
       if( p->u.rValue<=val ) return;
+      break;
   }
   *peWithin = NOT_WITHIN;
 }
@@ -1282,16 +1333,19 @@ static void rtreeLeafConstraint(
   RtreeDValue xN;      /* Coordinate value converted to a double */
 
   assert(p->op==RTREE_LE || p->op==RTREE_LT || p->op==RTREE_GE 
-      || p->op==RTREE_GT || p->op==RTREE_EQ );
+      || p->op==RTREE_GT || p->op==RTREE_EQ || p->op==RTREE_TRUE
+      || p->op==RTREE_FALSE );
   pCellData += 8 + p->iCoord*4;
-  assert( ((((char*)pCellData) - (char*)0)&3)==0 );  /* 4-byte aligned */
+  assert( (((sqlite3_uint64)pCellData)&3)==0 );  /* 4-byte aligned */
   RTREE_DECODE_COORD(eInt, pCellData, xN);
   switch( p->op ){
-    case RTREE_LE: if( xN <= p->u.rValue ) return;  break;
-    case RTREE_LT: if( xN <  p->u.rValue ) return;  break;
-    case RTREE_GE: if( xN >= p->u.rValue ) return;  break;
-    case RTREE_GT: if( xN >  p->u.rValue ) return;  break;
-    default:       if( xN == p->u.rValue ) return;  break;
+    case RTREE_TRUE:  return;   /* Always satisfied */
+    case RTREE_FALSE: break;    /* Never satisfied */
+    case RTREE_LE:    if( xN <= p->u.rValue ) return;  break;
+    case RTREE_LT:    if( xN <  p->u.rValue ) return;  break;
+    case RTREE_GE:    if( xN >= p->u.rValue ) return;  break;
+    case RTREE_GT:    if( xN >  p->u.rValue ) return;  break;
+    default:          if( xN == p->u.rValue ) return;  break;
   }
   *peWithin = NOT_WITHIN;
 }
@@ -1325,11 +1379,12 @@ static int nodeRowidIndex(
 */
 static int nodeParentIndex(Rtree *pRtree, RtreeNode *pNode, int *piIndex){
   RtreeNode *pParent = pNode->pParent;
-  if( pParent ){
+  if( ALWAYS(pParent) ){
     return nodeRowidIndex(pRtree, pParent, pNode->iNode, piIndex);
+  }else{
+    *piIndex = -1;
+    return SQLITE_OK;
   }
-  *piIndex = -1;
-  return SQLITE_OK;
 }
 
 /*
@@ -1452,7 +1507,8 @@ static RtreeSearchPoint *rtreeSearchPointNew(
       pNew = rtreeEnqueue(pCur, rScore, iLevel);
       if( pNew==0 ) return 0;
       ii = (int)(pNew - pCur->aPoint) + 1;
-      if( ii<RTREE_CACHE_SZ ){
+      assert( ii==1 );
+      if( ALWAYS(ii<RTREE_CACHE_SZ) ){
         assert( pCur->aNode[ii]==0 );
         pCur->aNode[ii] = pCur->aNode[0];
       }else{
@@ -1513,7 +1569,7 @@ static void rtreeSearchPointPop(RtreeCursor *p){
   if( p->bPoint ){
     p->anQueue[p->sPoint.iLevel]--;
     p->bPoint = 0;
-  }else if( p->nPoint ){
+  }else if( ALWAYS(p->nPoint) ){
     p->anQueue[p->aPoint[0].iLevel]--;
     n = --p->nPoint;
     p->aPoint[0] = p->aPoint[n];
@@ -1564,13 +1620,14 @@ static int rtreeStepToLeaf(RtreeCursor *pCur){
 
   eInt = pRtree->eCoordType==RTREE_COORD_INT32;
   while( (p = rtreeSearchPointFirst(pCur))!=0 && p->iLevel>0 ){
+    u8 *pCellData;
     pNode = rtreeNodeOfFirstSearchPoint(pCur, &rc);
     if( rc ) return rc;
     nCell = NCELL(pNode);
     assert( nCell<200 );
+    pCellData = pNode->zData + (4+pRtree->nBytesPerCell*p->iCell);
     while( p->iCell<nCell ){
       sqlite3_rtree_dbl rScore = (sqlite3_rtree_dbl)-1;
-      u8 *pCellData = pNode->zData + (4+pRtree->nBytesPerCell*p->iCell);
       eWithin = FULLY_WITHIN;
       for(ii=0; ii<nConstraint; ii++){
         RtreeConstraint *pConstraint = pCur->aConstraint + ii;
@@ -1583,13 +1640,23 @@ static int rtreeStepToLeaf(RtreeCursor *pCur){
         }else{
           rtreeNonleafConstraint(pConstraint, eInt, pCellData, &eWithin);
         }
-        if( eWithin==NOT_WITHIN ) break;
+        if( eWithin==NOT_WITHIN ){
+          p->iCell++;
+          pCellData += pRtree->nBytesPerCell;
+          break;
+        }
       }
-      p->iCell++;
       if( eWithin==NOT_WITHIN ) continue;
+      p->iCell++;
       x.iLevel = p->iLevel - 1;
       if( x.iLevel ){
         x.id = readInt64(pCellData);
+        for(ii=0; ii<pCur->nPoint; ii++){
+          if( pCur->aPoint[ii].id==x.id ){
+            RTREE_IS_CORRUPT(pRtree);
+            return SQLITE_CORRUPT_VTAB;
+          }
+        }
         x.iCell = 0;
       }else{
         x.id = p->id;
@@ -1643,7 +1710,7 @@ static int rtreeRowid(sqlite3_vtab_cursor *pVtabCursor, sqlite_int64 *pRowid){
   RtreeSearchPoint *p = rtreeSearchPointFirst(pCsr);
   int rc = SQLITE_OK;
   RtreeNode *pNode = rtreeNodeOfFirstSearchPoint(pCsr, &rc);
-  if( rc==SQLITE_OK && p ){
+  if( rc==SQLITE_OK && ALWAYS(p) ){
     *pRowid = nodeGetRowid(RTREE_OF_CURSOR(pCsr), pNode, p->iCell);
   }
   return rc;
@@ -1661,7 +1728,7 @@ static int rtreeColumn(sqlite3_vtab_cursor *cur, sqlite3_context *ctx, int i){
   RtreeNode *pNode = rtreeNodeOfFirstSearchPoint(pCsr, &rc);
 
   if( rc ) return rc;
-  if( p==0 ) return SQLITE_OK;
+  if( NEVER(p==0) ) return SQLITE_OK;
   if( i==0 ){
     sqlite3_result_int64(ctx, nodeGetRowid(pRtree, pNode, p->iCell));
   }else if( i<=pRtree->nDim2 ){
@@ -1773,17 +1840,11 @@ static int rtreeFilter(
   int ii;
   int rc = SQLITE_OK;
   int iCell = 0;
-  sqlite3_stmt *pStmt;
 
   rtreeReference(pRtree);
 
   /* Reset the cursor to the same state as rtreeOpen() leaves it in. */
-  freeCursorConstraints(pCsr);
-  sqlite3_free(pCsr->aPoint);
-  pStmt = pCsr->pReadAux;
-  memset(pCsr, 0, sizeof(RtreeCursor));
-  pCsr->base.pVtab = (sqlite3_vtab*)pRtree;
-  pCsr->pReadAux = pStmt;
+  resetCursor(pCsr);
 
   pCsr->iStrategy = idxNum;
   if( idxNum==1 ){
@@ -1792,7 +1853,15 @@ static int rtreeFilter(
     RtreeSearchPoint *p;     /* Search point for the leaf */
     i64 iRowid = sqlite3_value_int64(argv[0]);
     i64 iNode = 0;
-    rc = findLeafNode(pRtree, iRowid, &pLeaf, &iNode);
+    int eType = sqlite3_value_numeric_type(argv[0]);
+    if( eType==SQLITE_INTEGER
+     || (eType==SQLITE_FLOAT && sqlite3_value_double(argv[0])==iRowid)
+    ){
+      rc = findLeafNode(pRtree, iRowid, &pLeaf, &iNode);
+    }else{
+      rc = SQLITE_OK;
+      pLeaf = 0;
+    }
     if( rc==SQLITE_OK && pLeaf!=0 ){
       p = rtreeSearchPointNew(pCsr, RTREE_ZERO, 0);
       assert( p!=0 );  /* Always returns pCsr->sPoint */
@@ -1822,6 +1891,7 @@ static int rtreeFilter(
                 || (idxStr && (int)strlen(idxStr)==argc*2) );
         for(ii=0; ii<argc; ii++){
           RtreeConstraint *p = &pCsr->aConstraint[ii];
+          int eType = sqlite3_value_numeric_type(argv[ii]);
           p->op = idxStr[ii*2];
           p->iCoord = idxStr[ii*2+1]-'0';
           if( p->op>=RTREE_MATCH ){
@@ -1836,20 +1906,32 @@ static int rtreeFilter(
             p->pInfo->nCoord = pRtree->nDim2;
             p->pInfo->anQueue = pCsr->anQueue;
             p->pInfo->mxLevel = pRtree->iDepth + 1;
-          }else{
+          }else if( eType==SQLITE_INTEGER || eType==SQLITE_FLOAT ){
 #ifdef SQLITE_RTREE_INT_ONLY
             p->u.rValue = sqlite3_value_int64(argv[ii]);
 #else
             p->u.rValue = sqlite3_value_double(argv[ii]);
 #endif
+          }else{
+            p->u.rValue = RTREE_ZERO;
+            if( eType==SQLITE_NULL ){
+              p->op = RTREE_FALSE;
+            }else if( p->op==RTREE_LT || p->op==RTREE_LE ){
+              p->op = RTREE_TRUE;
+            }else{
+              p->op = RTREE_FALSE;
+            }
           }
         }
       }
     }
     if( rc==SQLITE_OK ){
       RtreeSearchPoint *pNew;
+      assert( pCsr->bPoint==0 );  /* Due to the resetCursor() call above */
       pNew = rtreeSearchPointNew(pCsr, RTREE_ZERO, (u8)(pRtree->iDepth+1));
-      if( pNew==0 ) return SQLITE_NOMEM;
+      if( NEVER(pNew==0) ){       /* Because pCsr->bPoint was FALSE */
+        return SQLITE_NOMEM;
+      }
       pNew->id = 1;
       pNew->iCell = 0;
       pNew->eWithin = PARTLY_WITHIN;
@@ -1926,7 +2008,7 @@ static int rtreeBestIndex(sqlite3_vtab *tab, sqlite3_index_info *pIdxInfo){
     struct sqlite3_index_constraint *p = &pIdxInfo->aConstraint[ii];
 
     if( bMatch==0 && p->usable 
-     && p->iColumn==0 && p->op==SQLITE_INDEX_CONSTRAINT_EQ 
+     && p->iColumn<=0 && p->op==SQLITE_INDEX_CONSTRAINT_EQ 
     ){
       /* We have an equality constraint on the rowid. Use strategy 1. */
       int jj;
@@ -2132,7 +2214,7 @@ static int ChooseLeaf(
 
     int nCell = NCELL(pNode);
     RtreeCell cell;
-    RtreeNode *pChild;
+    RtreeNode *pChild = 0;
 
     RtreeCell *aCell = 0;
 
@@ -2179,12 +2261,19 @@ static int AdjustTree(
 ){
   RtreeNode *p = pNode;
   int cnt = 0;
+  int rc;
   while( p->pParent ){
     RtreeNode *pParent = p->pParent;
     RtreeCell cell;
     int iCell;
 
-    if( (++cnt)>1000 || nodeParentIndex(pRtree, p, &iCell)  ){
+    cnt++;
+    if( NEVER(cnt>100) ){
+      RTREE_IS_CORRUPT(pRtree);
+      return SQLITE_CORRUPT_VTAB;
+    }
+    rc = nodeParentIndex(pRtree, p, &iCell);
+    if( NEVER(rc!=SQLITE_OK) ){
       RTREE_IS_CORRUPT(pRtree);
       return SQLITE_CORRUPT_VTAB;
     }
@@ -2473,12 +2562,17 @@ static int updateMapping(
   xSetMapping = ((iHeight==0)?rowidWrite:parentWrite);
   if( iHeight>0 ){
     RtreeNode *pChild = nodeHashLookup(pRtree, iRowid);
+    RtreeNode *p;
+    for(p=pNode; p; p=p->pParent){
+      if( p==pChild ) return SQLITE_CORRUPT_VTAB;
+    }
     if( pChild ){
       nodeRelease(pRtree, pChild->pParent);
       nodeReference(pNode);
       pChild->pParent = pNode;
     }
   }
+  if( NEVER(pNode==0) ) return SQLITE_ERROR;
   return xSetMapping(pRtree, iRowid, pNode->iNode);
 }
 
@@ -2568,11 +2662,12 @@ static int SplitNode(
     RtreeNode *pParent = pLeft->pParent;
     int iCell;
     rc = nodeParentIndex(pRtree, pLeft, &iCell);
-    if( rc==SQLITE_OK ){
+    if( ALWAYS(rc==SQLITE_OK) ){
       nodeOverwriteCell(pRtree, pParent, &leftbbox, iCell);
       rc = AdjustTree(pRtree, pParent, &leftbbox);
+      assert( rc==SQLITE_OK );
     }
-    if( rc!=SQLITE_OK ){
+    if( NEVER(rc!=SQLITE_OK) ){
       goto splitnode_out;
     }
   }
@@ -2647,7 +2742,7 @@ static int fixLeafParent(Rtree *pRtree, RtreeNode *pLeaf){
       */
       iNode = sqlite3_column_int64(pRtree->pReadParent, 0);
       for(pTest=pLeaf; pTest && pTest->iNode!=iNode; pTest=pTest->pParent);
-      if( !pTest ){
+      if( pTest==0 ){
         rc2 = nodeAcquire(pRtree, iNode, 0, &pChild->pParent);
       }
     }
@@ -2678,6 +2773,7 @@ static int removeNode(Rtree *pRtree, RtreeNode *pNode, int iHeight){
     pParent = pNode->pParent;
     pNode->pParent = 0;
     rc = deleteCell(pRtree, pParent, iCell, iHeight+1);
+    testcase( rc!=SQLITE_OK );
   }
   rc2 = nodeRelease(pRtree, pParent);
   if( rc==SQLITE_OK ){
@@ -2900,7 +2996,7 @@ static int rtreeInsertCell(
     }
   }else{
     rc = AdjustTree(pRtree, pNode, pCell);
-    if( rc==SQLITE_OK ){
+    if( ALWAYS(rc==SQLITE_OK) ){
       if( iHeight==0 ){
         rc = rowidWrite(pRtree, pCell->iRowid, pNode->iNode);
       }else{
@@ -3006,7 +3102,7 @@ static int rtreeDeleteRowid(Rtree *pRtree, sqlite3_int64 iDelete){
     int rc2;
     RtreeNode *pChild = 0;
     i64 iChild = nodeGetRowid(pRtree, pRoot, 0);
-    rc = nodeAcquire(pRtree, iChild, pRoot, &pChild);
+    rc = nodeAcquire(pRtree, iChild, pRoot, &pChild);  /* tag-20210916a */
     if( rc==SQLITE_OK ){
       rc = removeNode(pRtree, pChild, pRtree->iDepth-1);
     }
@@ -3139,7 +3235,7 @@ static int rtreeUpdate(
   rtreeReference(pRtree);
   assert(nData>=1);
 
-  cell.iRowid = 0;  /* Used only to suppress a compiler warning */
+  memset(&cell, 0, sizeof(cell));
 
   /* Constraint handling. A write operation on an r-tree table may return
   ** SQLITE_CONSTRAINT for two reasons:
@@ -3341,7 +3437,7 @@ static int rtreeQueryStat1(sqlite3 *db, Rtree *pRtree){
   char *zSql;
   sqlite3_stmt *p;
   int rc;
-  i64 nRow = 0;
+  i64 nRow = RTREE_MIN_ROWEST;
 
   rc = sqlite3_table_column_metadata(
       db, pRtree->zDb, "sqlite_stat1",0,0,0,0,0,0
@@ -3358,20 +3454,10 @@ static int rtreeQueryStat1(sqlite3 *db, Rtree *pRtree){
     if( rc==SQLITE_OK ){
       if( sqlite3_step(p)==SQLITE_ROW ) nRow = sqlite3_column_int64(p, 0);
       rc = sqlite3_finalize(p);
-    }else if( rc!=SQLITE_NOMEM ){
-      rc = SQLITE_OK;
-    }
-
-    if( rc==SQLITE_OK ){
-      if( nRow==0 ){
-        pRtree->nRowEst = RTREE_DEFAULT_ROWEST;
-      }else{
-        pRtree->nRowEst = MAX(nRow, RTREE_MIN_ROWEST);
-      }
     }
     sqlite3_free(zSql);
   }
-
+  pRtree->nRowEst = MAX(nRow, RTREE_MIN_ROWEST);
   return rc;
 }
 
@@ -3521,9 +3607,12 @@ static int rtreeSqlInit(
       sqlite3_str_appendf(p, "UPDATE \"%w\".\"%w_rowid\"SET ", zDb, zPrefix);
       for(ii=0; ii<pRtree->nAux; ii++){
         if( ii ) sqlite3_str_append(p, ",", 1);
+#ifdef SQLITE_ENABLE_GEOPOLY
         if( ii<pRtree->nAuxNotNull ){
           sqlite3_str_appendf(p,"a%d=coalesce(?%d,a%d)",ii,ii+2,ii);
-        }else{
+        }else
+#endif
+        {
           sqlite3_str_appendf(p,"a%d=?%d",ii,ii+2);
         }
       }
@@ -3618,6 +3707,14 @@ static int getNodeSize(
   return rc;
 }
 
+/*
+** Return the length of a token
+*/
+static int rtreeTokenLength(const char *z){
+  int dummy = 0;
+  return sqlite3GetToken((const unsigned char*)z,&dummy);
+}
+
 /* 
 ** This function is the implementation of both the xConnect and xCreate
 ** methods of the r-tree virtual table.
@@ -3654,8 +3751,8 @@ static int rtreeInit(
   };
 
   assert( RTREE_MAX_AUX_COLUMN<256 ); /* Aux columns counted by a u8 */
-  if( argc>RTREE_MAX_AUX_COLUMN+3 ){
-    *pzErr = sqlite3_mprintf("%s", aErrMsg[3]);
+  if( argc<6 || argc>RTREE_MAX_AUX_COLUMN+3 ){
+    *pzErr = sqlite3_mprintf("%s", aErrMsg[2 + (argc>=6)]);
     return SQLITE_ERROR;
   }
 
@@ -3683,16 +3780,20 @@ static int rtreeInit(
   ** the r-tree table schema.
   */
   pSql = sqlite3_str_new(db);
-  sqlite3_str_appendf(pSql, "CREATE TABLE x(%s", argv[3]);
+  sqlite3_str_appendf(pSql, "CREATE TABLE x(%.*s INT", 
+                      rtreeTokenLength(argv[3]), argv[3]);
   for(ii=4; ii<argc; ii++){
-    if( argv[ii][0]=='+' ){
+    const char *zArg = argv[ii];
+    if( zArg[0]=='+' ){
       pRtree->nAux++;
-      sqlite3_str_appendf(pSql, ",%s", argv[ii]+1);
+      sqlite3_str_appendf(pSql, ",%.*s", rtreeTokenLength(zArg+1), zArg+1);
     }else if( pRtree->nAux>0 ){
       break;
     }else{
+      static const char *azFormat[] = {",%.*s REAL", ",%.*s INT"};
       pRtree->nDim2++;
-      sqlite3_str_appendf(pSql, ",%s", argv[ii]);
+      sqlite3_str_appendf(pSql, azFormat[eCoordType],
+                          rtreeTokenLength(zArg), zArg);
     }
   }
   sqlite3_str_appendf(pSql, ");");
@@ -3776,6 +3877,7 @@ static void rtreenode(sqlite3_context *ctx, int nArg, sqlite3_value **apArg){
   tree.nDim2 = tree.nDim*2;
   tree.nBytesPerCell = 8 + 8 * tree.nDim;
   node.zData = (u8 *)sqlite3_value_blob(apArg[1]);
+  if( node.zData==0 ) return;
   nData = sqlite3_value_bytes(apArg[1]);
   if( nData<4 ) return;
   if( nData<NCELL(&node)*tree.nBytesPerCell ) return;
@@ -3815,11 +3917,16 @@ static void rtreedepth(sqlite3_context *ctx, int nArg, sqlite3_value **apArg){
   UNUSED_PARAMETER(nArg);
   if( sqlite3_value_type(apArg[0])!=SQLITE_BLOB 
    || sqlite3_value_bytes(apArg[0])<2
+
   ){
     sqlite3_result_error(ctx, "Invalid argument to rtreedepth()", -1); 
   }else{
     u8 *zBlob = (u8 *)sqlite3_value_blob(apArg[0]);
-    sqlite3_result_int(ctx, readInt16(zBlob));
+    if( zBlob ){
+      sqlite3_result_int(ctx, readInt16(zBlob));
+    }else{
+      sqlite3_result_error_nomem(ctx);
+    }
   }
 }
 
@@ -4185,8 +4292,10 @@ static int rtreeCheckTable(
     if( pStmt ){
       nAux = sqlite3_column_count(pStmt) - 2;
       sqlite3_finalize(pStmt);
+    }else 
+    if( check.rc!=SQLITE_NOMEM ){
+      check.rc = SQLITE_OK;
     }
-    check.rc = SQLITE_OK;
   }
 
   /* Find number of dimensions in the rtree table. */
@@ -4443,7 +4552,10 @@ int sqlite3_rtree_query_callback(
 
   /* Allocate and populate the context object. */
   pGeomCtx = (RtreeGeomCallback *)sqlite3_malloc(sizeof(RtreeGeomCallback));
-  if( !pGeomCtx ) return SQLITE_NOMEM;
+  if( !pGeomCtx ){
+    if( xDestructor ) xDestructor(pContext);
+    return SQLITE_NOMEM;
+  }
   pGeomCtx->xGeom = 0;
   pGeomCtx->xQueryFunc = xQueryFunc;
   pGeomCtx->xDestructor = xDestructor;

@@ -75,7 +75,9 @@ int sqlite3VdbeCheckMemInvariants(Mem *p){
 
   /* The szMalloc field holds the correct memory allocation size */
   assert( p->szMalloc==0
-       || p->szMalloc==sqlite3DbMallocSize(p->db,p->zMalloc) );
+       || (p->flags==MEM_Undefined 
+           && p->szMalloc<=sqlite3DbMallocSize(p->db,p->zMalloc))
+       || p->szMalloc==sqlite3DbMallocSize(p->db,p->zMalloc));
 
   /* If p holds a string or blob, the Mem.z must point to exactly
   ** one of the following:
@@ -104,16 +106,26 @@ int sqlite3VdbeCheckMemInvariants(Mem *p){
 static void vdbeMemRenderNum(int sz, char *zBuf, Mem *p){
   StrAccum acc;
   assert( p->flags & (MEM_Int|MEM_Real|MEM_IntReal) );
-  sqlite3StrAccumInit(&acc, 0, zBuf, sz, 0);
+  assert( sz>22 );
   if( p->flags & MEM_Int ){
-    sqlite3_str_appendf(&acc, "%lld", p->u.i);
-  }else if( p->flags & MEM_IntReal ){
-    sqlite3_str_appendf(&acc, "%!.15g", (double)p->u.i);
+#if GCC_VERSION>=7000000
+    /* Work-around for GCC bug
+    ** https://gcc.gnu.org/bugzilla/show_bug.cgi?id=96270 */
+    i64 x;
+    assert( (p->flags&MEM_Int)*2==sizeof(x) );
+    memcpy(&x, (char*)&p->u, (p->flags&MEM_Int)*2);
+    p->n = sqlite3Int64ToText(x, zBuf);
+#else
+    p->n = sqlite3Int64ToText(p->u.i, zBuf);
+#endif
   }else{
-    sqlite3_str_appendf(&acc, "%!.15g", p->u.r);
+    sqlite3StrAccumInit(&acc, 0, zBuf, sz, 0);
+    sqlite3_str_appendf(&acc, "%!.15g", 
+         (p->flags & MEM_IntReal)!=0 ? (double)p->u.i : p->u.r);
+    assert( acc.zText==zBuf && acc.mxAlloc<=0 );
+    zBuf[acc.nChar] = 0; /* Fast version of sqlite3StrAccumFinish(&acc) */
+    p->n = acc.nChar;
   }
-  assert( acc.zText==zBuf && acc.mxAlloc<=0 );
-  zBuf[acc.nChar] = 0; /* Fast version of sqlite3StrAccumFinish(&acc) */
 }
 
 #ifdef SQLITE_DEBUG
@@ -140,6 +152,7 @@ static void vdbeMemRenderNum(int sz, char *zBuf, Mem *p){
 ** This routine is for use inside of assert() statements only.
 */
 int sqlite3VdbeMemValidStrRep(Mem *p){
+  Mem tmp;
   char zBuf[100];
   char *z;
   int i, j, incr;
@@ -156,7 +169,8 @@ int sqlite3VdbeMemValidStrRep(Mem *p){
     assert( p->enc==SQLITE_UTF8 || p->z[((p->n+1)&~1)+1]==0 );
   }
   if( (p->flags & (MEM_Int|MEM_Real|MEM_IntReal))==0 ) return 1;
-  vdbeMemRenderNum(sizeof(zBuf), zBuf, p);
+  memcpy(&tmp, p, sizeof(tmp));
+  vdbeMemRenderNum(sizeof(zBuf), zBuf, &tmp);
   z = p->z;
   i = j = 0;
   incr = 1;
@@ -189,10 +203,15 @@ int sqlite3VdbeChangeEncoding(Mem *pMem, int desiredEnc){
 #ifndef SQLITE_OMIT_UTF16
   int rc;
 #endif
+  assert( pMem!=0 );
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
   assert( desiredEnc==SQLITE_UTF8 || desiredEnc==SQLITE_UTF16LE
            || desiredEnc==SQLITE_UTF16BE );
-  if( !(pMem->flags&MEM_Str) || pMem->enc==desiredEnc ){
+  if( !(pMem->flags&MEM_Str) ){
+    pMem->enc = desiredEnc;
+    return SQLITE_OK;
+  }
+  if( pMem->enc==desiredEnc ){
     return SQLITE_OK;
   }
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
@@ -230,9 +249,17 @@ SQLITE_NOINLINE int sqlite3VdbeMemGrow(Mem *pMem, int n, int bPreserve){
   testcase( bPreserve && pMem->z==0 );
 
   assert( pMem->szMalloc==0
-       || pMem->szMalloc==sqlite3DbMallocSize(pMem->db, pMem->zMalloc) );
+       || (pMem->flags==MEM_Undefined 
+           && pMem->szMalloc<=sqlite3DbMallocSize(pMem->db,pMem->zMalloc))
+       || pMem->szMalloc==sqlite3DbMallocSize(pMem->db,pMem->zMalloc));
   if( pMem->szMalloc>0 && bPreserve && pMem->z==pMem->zMalloc ){
-    pMem->z = pMem->zMalloc = sqlite3DbReallocOrFree(pMem->db, pMem->z, n);
+    if( pMem->db ){
+      pMem->z = pMem->zMalloc = sqlite3DbReallocOrFree(pMem->db, pMem->z, n);
+    }else{
+      pMem->zMalloc = sqlite3Realloc(pMem->z, n);
+      if( pMem->zMalloc==0 ) sqlite3_free(pMem->z);
+      pMem->z = pMem->zMalloc;
+    }
     bPreserve = 0;
   }else{
     if( pMem->szMalloc>0 ) sqlite3DbFreeNN(pMem->db, pMem->zMalloc);
@@ -313,6 +340,7 @@ static SQLITE_NOINLINE int vdbeMemAddTerminator(Mem *pMem){
 ** Return SQLITE_OK on success or SQLITE_NOMEM if malloc fails.
 */
 int sqlite3VdbeMemMakeWriteable(Mem *pMem){
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
   if( (pMem->flags & (MEM_Str|MEM_Blob))!=0 ){
@@ -337,6 +365,7 @@ int sqlite3VdbeMemMakeWriteable(Mem *pMem){
 #ifndef SQLITE_OMIT_INCRBLOB
 int sqlite3VdbeMemExpandBlob(Mem *pMem){
   int nByte;
+  assert( pMem!=0 );
   assert( pMem->flags & MEM_Zero );
   assert( (pMem->flags&MEM_Blob)!=0 || MemNullNochng(pMem) );
   testcase( sqlite3_value_nochange(pMem) );
@@ -352,6 +381,8 @@ int sqlite3VdbeMemExpandBlob(Mem *pMem){
   if( sqlite3VdbeMemGrow(pMem, nByte, 1) ){
     return SQLITE_NOMEM_BKPT;
   }
+  assert( pMem->z!=0 );
+  assert( sqlite3DbMallocSize(pMem->db,pMem->z) >= nByte );
 
   memset(&pMem->z[pMem->n], 0, pMem->u.nZero);
   pMem->n += pMem->u.nZero;
@@ -364,6 +395,7 @@ int sqlite3VdbeMemExpandBlob(Mem *pMem){
 ** Make sure the given Mem is \u0000 terminated.
 */
 int sqlite3VdbeMemNulTerminate(Mem *pMem){
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   testcase( (pMem->flags & (MEM_Term|MEM_Str))==(MEM_Term|MEM_Str) );
   testcase( (pMem->flags & (MEM_Term|MEM_Str))==0 );
@@ -391,6 +423,7 @@ int sqlite3VdbeMemNulTerminate(Mem *pMem){
 int sqlite3VdbeMemStringify(Mem *pMem, u8 enc, u8 bForce){
   const int nByte = 32;
 
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( !(pMem->flags&MEM_Zero) );
   assert( !(pMem->flags&(MEM_Str|MEM_Blob)) );
@@ -406,7 +439,7 @@ int sqlite3VdbeMemStringify(Mem *pMem, u8 enc, u8 bForce){
 
   vdbeMemRenderNum(nByte, pMem->z, pMem);
   assert( pMem->z!=0 );
-  pMem->n = sqlite3Strlen30NN(pMem->z);
+  assert( pMem->n==sqlite3Strlen30NN(pMem->z) );
   pMem->enc = SQLITE_UTF8;
   pMem->flags |= MEM_Str|MEM_Term;
   if( bForce ) pMem->flags &= ~(MEM_Int|MEM_Real|MEM_IntReal);
@@ -426,9 +459,11 @@ int sqlite3VdbeMemFinalize(Mem *pMem, FuncDef *pFunc){
   sqlite3_context ctx;
   Mem t;
   assert( pFunc!=0 );
+  assert( pMem!=0 );
+  assert( pMem->db!=0 );
   assert( pFunc->xFinalize!=0 );
   assert( (pMem->flags & MEM_Null)!=0 || pFunc==pMem->u.pDef );
-  assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
+  assert( sqlite3_mutex_held(pMem->db->mutex) );
   memset(&ctx, 0, sizeof(ctx));
   memset(&t, 0, sizeof(t));
   t.flags = MEM_Null;
@@ -436,6 +471,7 @@ int sqlite3VdbeMemFinalize(Mem *pMem, FuncDef *pFunc){
   ctx.pOut = &t;
   ctx.pMem = pMem;
   ctx.pFunc = pFunc;
+  ctx.enc = ENC(t.db);
   pFunc->xFinalize(&ctx); /* IMP: R-24505-23230 */
   assert( (pMem->flags & MEM_Dyn)==0 );
   if( pMem->szMalloc>0 ) sqlite3DbFreeNN(pMem->db, pMem->zMalloc);
@@ -454,19 +490,17 @@ int sqlite3VdbeMemFinalize(Mem *pMem, FuncDef *pFunc){
 #ifndef SQLITE_OMIT_WINDOWFUNC
 int sqlite3VdbeMemAggValue(Mem *pAccum, Mem *pOut, FuncDef *pFunc){
   sqlite3_context ctx;
-  Mem t;
   assert( pFunc!=0 );
   assert( pFunc->xValue!=0 );
   assert( (pAccum->flags & MEM_Null)!=0 || pFunc==pAccum->u.pDef );
-  assert( pAccum->db==0 || sqlite3_mutex_held(pAccum->db->mutex) );
+  assert( pAccum->db!=0 );
+  assert( sqlite3_mutex_held(pAccum->db->mutex) );
   memset(&ctx, 0, sizeof(ctx));
-  memset(&t, 0, sizeof(t));
-  t.flags = MEM_Null;
-  t.db = pAccum->db;
   sqlite3VdbeMemSetNull(pOut);
   ctx.pOut = pOut;
   ctx.pMem = pAccum;
   ctx.pFunc = pFunc;
+  ctx.enc = ENC(pAccum->db);
   pFunc->xValue(&ctx);
   return ctx.isError;
 }
@@ -532,6 +566,14 @@ void sqlite3VdbeMemRelease(Mem *p){
   }
 }
 
+/* Like sqlite3VdbeMemRelease() but faster for cases where we
+** know in advance that the Mem is not MEM_Dyn or MEM_Agg.
+*/
+void sqlite3VdbeMemReleaseMalloc(Mem *p){
+  assert( !VdbeMemDynamic(p) );
+  if( p->szMalloc ) vdbeMemClear(p);
+}
+
 /*
 ** Convert a 64-bit IEEE double into a 64-bit signed integer.
 ** If the double is out of range of a 64-bit signed integer then
@@ -573,13 +615,14 @@ static SQLITE_NOINLINE i64 doubleToInt64(double r){
 **
 ** If pMem represents a string value, its encoding might be changed.
 */
-static SQLITE_NOINLINE i64 memIntValue(Mem *pMem){
+static SQLITE_NOINLINE i64 memIntValue(const Mem *pMem){
   i64 value = 0;
   sqlite3Atoi64(pMem->z, &value, pMem->n, pMem->enc);
   return value;
 }
-i64 sqlite3VdbeIntValue(Mem *pMem){
+i64 sqlite3VdbeIntValue(const Mem *pMem){
   int flags;
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
   flags = pMem->flags;
@@ -588,8 +631,7 @@ i64 sqlite3VdbeIntValue(Mem *pMem){
     return pMem->u.i;
   }else if( flags & MEM_Real ){
     return doubleToInt64(pMem->u.r);
-  }else if( flags & (MEM_Str|MEM_Blob) ){
-    assert( pMem->z || pMem->n==0 );
+  }else if( (flags & (MEM_Str|MEM_Blob))!=0 && pMem->z!=0 ){
     return memIntValue(pMem);
   }else{
     return 0;
@@ -609,6 +651,7 @@ static SQLITE_NOINLINE double memRealValue(Mem *pMem){
   return val;
 }
 double sqlite3VdbeRealValue(Mem *pMem){
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
   if( pMem->flags & MEM_Real ){
@@ -636,31 +679,35 @@ int sqlite3VdbeBooleanValue(Mem *pMem, int ifNull){
 }
 
 /*
-** The MEM structure is already a MEM_Real.  Try to also make it a
-** MEM_Int if we can.
+** The MEM structure is already a MEM_Real or MEM_IntReal. Try to 
+** make it a MEM_Int if we can.
 */
 void sqlite3VdbeIntegerAffinity(Mem *pMem){
-  i64 ix;
-  assert( pMem->flags & MEM_Real );
+  assert( pMem!=0 );
+  assert( pMem->flags & (MEM_Real|MEM_IntReal) );
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
 
-  ix = doubleToInt64(pMem->u.r);
-
-  /* Only mark the value as an integer if
-  **
-  **    (1) the round-trip conversion real->int->real is a no-op, and
-  **    (2) The integer is neither the largest nor the smallest
-  **        possible integer (ticket #3922)
-  **
-  ** The second and third terms in the following conditional enforces
-  ** the second condition under the assumption that addition overflow causes
-  ** values to wrap around.
-  */
-  if( pMem->u.r==ix && ix>SMALLEST_INT64 && ix<LARGEST_INT64 ){
-    pMem->u.i = ix;
+  if( pMem->flags & MEM_IntReal ){
     MemSetTypeFlag(pMem, MEM_Int);
+  }else{
+    i64 ix = doubleToInt64(pMem->u.r);
+
+    /* Only mark the value as an integer if
+    **
+    **    (1) the round-trip conversion real->int->real is a no-op, and
+    **    (2) The integer is neither the largest nor the smallest
+    **        possible integer (ticket #3922)
+    **
+    ** The second and third terms in the following conditional enforces
+    ** the second condition under the assumption that addition overflow causes
+    ** values to wrap around.
+    */
+    if( pMem->u.r==ix && ix>SMALLEST_INT64 && ix<LARGEST_INT64 ){
+      pMem->u.i = ix;
+      MemSetTypeFlag(pMem, MEM_Int);
+    }
   }
 }
 
@@ -668,6 +715,7 @@ void sqlite3VdbeIntegerAffinity(Mem *pMem){
 ** Convert pMem to type integer.  Invalidate any prior representations.
 */
 int sqlite3VdbeMemIntegerify(Mem *pMem){
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
@@ -682,6 +730,7 @@ int sqlite3VdbeMemIntegerify(Mem *pMem){
 ** Invalidate any prior representations.
 */
 int sqlite3VdbeMemRealify(Mem *pMem){
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
 
@@ -706,6 +755,16 @@ int sqlite3RealSameAsInt(double r1, sqlite3_int64 i){
           && i >= -2251799813685248LL && i < 2251799813685248LL);
 }
 
+/* Convert a floating point value to its closest integer.  Do so in
+** a way that avoids 'outside the range of representable values' warnings
+** from UBSAN.
+*/
+i64 sqlite3RealToI64(double r){
+  if( r<=(double)SMALLEST_INT64 ) return SMALLEST_INT64;
+  if( r>=(double)LARGEST_INT64) return LARGEST_INT64;
+  return (i64)r;
+}
+
 /*
 ** Convert pMem so that it has type MEM_Real or MEM_Int.
 ** Invalidate any prior representations.
@@ -715,6 +774,7 @@ int sqlite3RealSameAsInt(double r1, sqlite3_int64 i){
 ** as much of the string as we can and ignore the rest.
 */
 int sqlite3VdbeMemNumerify(Mem *pMem){
+  assert( pMem!=0 );
   testcase( pMem->flags & MEM_Int );
   testcase( pMem->flags & MEM_Real );
   testcase( pMem->flags & MEM_IntReal );
@@ -726,7 +786,7 @@ int sqlite3VdbeMemNumerify(Mem *pMem){
     assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
     rc = sqlite3AtoF(pMem->z, &pMem->u.r, pMem->n, pMem->enc);
     if( ((rc==0 || rc==1) && sqlite3Atoi64(pMem->z, &ix, pMem->n, pMem->enc)<=1)
-     || sqlite3RealSameAsInt(pMem->u.r, (ix = (i64)pMem->u.r))
+     || sqlite3RealSameAsInt(pMem->u.r, (ix = sqlite3RealToI64(pMem->u.r)))
     ){
       pMem->u.i = ix;
       MemSetTypeFlag(pMem, MEM_Int);
@@ -746,8 +806,8 @@ int sqlite3VdbeMemNumerify(Mem *pMem){
 ** affinity even if that results in loss of data.  This routine is
 ** used (for example) to implement the SQL "cast()" operator.
 */
-void sqlite3VdbeMemCast(Mem *pMem, u8 aff, u8 encoding){
-  if( pMem->flags & MEM_Null ) return;
+int sqlite3VdbeMemCast(Mem *pMem, u8 aff, u8 encoding){
+  if( pMem->flags & MEM_Null ) return SQLITE_OK;
   switch( aff ){
     case SQLITE_AFF_BLOB: {   /* Really a cast to BLOB */
       if( (pMem->flags & MEM_Blob)==0 ){
@@ -778,9 +838,11 @@ void sqlite3VdbeMemCast(Mem *pMem, u8 aff, u8 encoding){
       sqlite3ValueApplyAffinity(pMem, SQLITE_AFF_TEXT, encoding);
       assert( pMem->flags & MEM_Str || pMem->db->mallocFailed );
       pMem->flags &= ~(MEM_Int|MEM_Real|MEM_IntReal|MEM_Blob|MEM_Zero);
-      break;
+      if( encoding!=SQLITE_UTF8 ) pMem->n &= ~1;
+      return sqlite3VdbeChangeEncoding(pMem, encoding);
     }
   }
+  return SQLITE_OK;
 }
 
 /*
@@ -823,6 +885,7 @@ void sqlite3ValueSetNull(sqlite3_value *p){
 ** Delete any previous value and set the value to be a BLOB of length
 ** n containing all zeros.
 */
+#ifndef SQLITE_OMIT_INCRBLOB
 void sqlite3VdbeMemSetZeroBlob(Mem *pMem, int n){
   sqlite3VdbeMemRelease(pMem);
   pMem->flags = MEM_Blob|MEM_Zero;
@@ -832,6 +895,21 @@ void sqlite3VdbeMemSetZeroBlob(Mem *pMem, int n){
   pMem->enc = SQLITE_UTF8;
   pMem->z = 0;
 }
+#else
+int sqlite3VdbeMemSetZeroBlob(Mem *pMem, int n){
+  int nByte = n>0?n:1;
+  if( sqlite3VdbeMemGrow(pMem, nByte, 0) ){
+    return SQLITE_NOMEM_BKPT;
+  }
+  assert( pMem->z!=0 );
+  assert( sqlite3DbMallocSize(pMem->db, pMem->z)>=nByte );
+  memset(pMem->z, 0, nByte);
+  pMem->n = n>0?n:0;
+  pMem->flags = MEM_Blob;
+  pMem->enc = SQLITE_UTF8;
+  return SQLITE_OK;
+}
+#endif
 
 /*
 ** The pMem is known to contain content that needs to be destroyed prior
@@ -871,6 +949,7 @@ void sqlite3VdbeMemSetPointer(
   void (*xDestructor)(void*)
 ){
   assert( pMem->flags==MEM_Null );
+  vdbeMemClear(pMem);
   pMem->u.zPType = zPType ? zPType : "";
   pMem->z = pPtr;
   pMem->flags = MEM_Null|MEM_Dyn|MEM_Subtype|MEM_Term;
@@ -946,25 +1025,27 @@ int sqlite3VdbeMemTooBig(Mem *p){
 ** its link to a shallow copy and by marking any current shallow
 ** copies of this cell as invalid.
 **
-** This is used for testing and debugging only - to make sure shallow
-** copies are not misused.
+** This is used for testing and debugging only - to help ensure that shallow
+** copies (created by OP_SCopy) are not misused.
 */
 void sqlite3VdbeMemAboutToChange(Vdbe *pVdbe, Mem *pMem){
   int i;
   Mem *pX;
-  for(i=0, pX=pVdbe->aMem; i<pVdbe->nMem; i++, pX++){
+  for(i=1, pX=pVdbe->aMem+1; i<pVdbe->nMem; i++, pX++){
     if( pX->pScopyFrom==pMem ){
-      /* If pX is marked as a shallow copy of pMem, then verify that
+      u16 mFlags;
+      if( pVdbe->db->flags & SQLITE_VdbeTrace ){
+        sqlite3DebugPrintf("Invalidate R[%d] due to change in R[%d]\n",
+          (int)(pX - pVdbe->aMem), (int)(pMem - pVdbe->aMem));
+      }
+      /* If pX is marked as a shallow copy of pMem, then try to verify that
       ** no significant changes have been made to pX since the OP_SCopy.
       ** A significant change would indicated a missed call to this
       ** function for pX.  Minor changes, such as adding or removing a
       ** dual type, are allowed, as long as the underlying value is the
       ** same. */
-      u16 mFlags = pMem->flags & pX->flags & pX->mScopyFlags;
+      mFlags = pMem->flags & pX->flags & pX->mScopyFlags;
       assert( (mFlags&(MEM_Int|MEM_IntReal))==0 || pMem->u.i==pX->u.i );
-      assert( (mFlags&MEM_Real)==0 || pMem->u.r==pX->u.r );
-      assert( (mFlags&MEM_Str)==0  || (pMem->n==pX->n && pMem->z==pX->z) );
-      assert( (mFlags&MEM_Blob)==0  || sqlite3BlobCompare(pMem,pX)==0 );
       
       /* pMem is the register that is changing.  But also mark pX as
       ** undefined so that we can quickly detect the shallow-copy error */
@@ -975,7 +1056,6 @@ void sqlite3VdbeMemAboutToChange(Vdbe *pVdbe, Mem *pMem){
   pMem->pScopyFrom = 0;
 }
 #endif /* SQLITE_DEBUG */
-
 
 /*
 ** Make an shallow copy of pFrom into pTo.  Prior contents of
@@ -1052,20 +1132,29 @@ void sqlite3VdbeMemMove(Mem *pTo, Mem *pFrom){
 ** stored without allocating memory, then it is.  If a memory allocation
 ** is required to store the string, then value of pMem is unchanged.  In
 ** either case, SQLITE_TOOBIG is returned.
+**
+** The "enc" parameter is the text encoding for the string, or zero
+** to store a blob.
+**
+** If n is negative, then the string consists of all bytes up to but
+** excluding the first zero character.  The n parameter must be
+** non-negative for blobs.
 */
 int sqlite3VdbeMemSetStr(
   Mem *pMem,          /* Memory cell to set to string value */
   const char *z,      /* String pointer */
-  int n,              /* Bytes in string, or negative */
+  i64 n,              /* Bytes in string, or negative */
   u8 enc,             /* Encoding of z.  0 for BLOBs */
   void (*xDel)(void*) /* Destructor function */
 ){
-  int nByte = n;      /* New value for pMem->n */
+  i64 nByte = n;      /* New value for pMem->n */
   int iLimit;         /* Maximum allowed string or blob size */
-  u16 flags = 0;      /* New value for pMem->flags */
+  u16 flags;          /* New value for pMem->flags */
 
+  assert( pMem!=0 );
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
+  assert( enc!=0 || n>=0 );
 
   /* If z is a NULL pointer, set pMem to contain an SQL NULL. */
   if( !z ){
@@ -1078,15 +1167,30 @@ int sqlite3VdbeMemSetStr(
   }else{
     iLimit = SQLITE_MAX_LENGTH;
   }
-  flags = (enc==0?MEM_Blob:MEM_Str);
   if( nByte<0 ){
     assert( enc!=0 );
     if( enc==SQLITE_UTF8 ){
-      nByte = 0x7fffffff & (int)strlen(z);
+      nByte = strlen(z);
     }else{
       for(nByte=0; nByte<=iLimit && (z[nByte] | z[nByte+1]); nByte+=2){}
     }
-    flags |= MEM_Term;
+    flags= MEM_Str|MEM_Term;
+  }else if( enc==0 ){
+    flags = MEM_Blob;
+    enc = SQLITE_UTF8;
+  }else{
+    flags = MEM_Str;
+  }
+  if( nByte>iLimit ){
+    if( xDel && xDel!=SQLITE_TRANSIENT ){
+      if( xDel==SQLITE_DYNAMIC ){
+        sqlite3DbFree(pMem->db, (void*)z);
+      }else{
+        xDel((void*)z);
+      }
+    }
+    sqlite3VdbeMemSetNull(pMem);
+    return sqlite3ErrorToParser(pMem->db, SQLITE_TOOBIG);
   }
 
   /* The following block sets the new values of Mem.z and Mem.xDel. It
@@ -1094,12 +1198,9 @@ int sqlite3VdbeMemSetStr(
   ** management (one of MEM_Dyn or MEM_Static).
   */
   if( xDel==SQLITE_TRANSIENT ){
-    u32 nAlloc = nByte;
+    i64 nAlloc = nByte;
     if( flags&MEM_Term ){
       nAlloc += (enc==SQLITE_UTF8?1:2);
-    }
-    if( nByte>iLimit ){
-      return sqlite3ErrorToParser(pMem->db, SQLITE_TOOBIG);
     }
     testcase( nAlloc==0 );
     testcase( nAlloc==31 );
@@ -1120,19 +1221,16 @@ int sqlite3VdbeMemSetStr(
     }
   }
 
-  pMem->n = nByte;
+  pMem->n = (int)(nByte & 0x7fffffff);
   pMem->flags = flags;
-  pMem->enc = (enc==0 ? SQLITE_UTF8 : enc);
+  pMem->enc = enc;
 
 #ifndef SQLITE_OMIT_UTF16
-  if( pMem->enc!=SQLITE_UTF8 && sqlite3VdbeMemHandleBom(pMem) ){
+  if( enc>SQLITE_UTF8 && sqlite3VdbeMemHandleBom(pMem) ){
     return SQLITE_NOMEM_BKPT;
   }
 #endif
 
-  if( nByte>iLimit ){
-    return SQLITE_TOOBIG;
-  }
 
   return SQLITE_OK;
 }
@@ -1152,7 +1250,7 @@ int sqlite3VdbeMemSetStr(
 ** If this routine fails for any reason (malloc returns NULL or unable
 ** to read from the disk) then the pMem is left in an inconsistent state.
 */
-static SQLITE_NOINLINE int vdbeMemFromBtreeResize(
+int sqlite3VdbeMemFromBtree(
   BtCursor *pCur,   /* Cursor pointing at record to retrieve. */
   u32 offset,       /* Offset from the start of data to return bytes from. */
   u32 amt,          /* Number of bytes to return. */
@@ -1175,13 +1273,11 @@ static SQLITE_NOINLINE int vdbeMemFromBtreeResize(
   }
   return rc;
 }
-int sqlite3VdbeMemFromBtree(
+int sqlite3VdbeMemFromBtreeZeroOffset(
   BtCursor *pCur,   /* Cursor pointing at record to retrieve. */
-  u32 offset,       /* Offset from the start of data to return bytes from. */
   u32 amt,          /* Number of bytes to return. */
   Mem *pMem         /* OUT: Return data in this Mem structure. */
 ){
-  char *zData;        /* Data from the btree layer */
   u32 available = 0;  /* Number of bytes available on the local btree page */
   int rc = SQLITE_OK; /* Return code */
 
@@ -1191,15 +1287,14 @@ int sqlite3VdbeMemFromBtree(
   /* Note: the calls to BtreeKeyFetch() and DataFetch() below assert() 
   ** that both the BtShared and database handle mutexes are held. */
   assert( !sqlite3VdbeMemIsRowSet(pMem) );
-  zData = (char *)sqlite3BtreePayloadFetch(pCur, &available);
-  assert( zData!=0 );
+  pMem->z = (char *)sqlite3BtreePayloadFetch(pCur, &available);
+  assert( pMem->z!=0 );
 
-  if( offset+amt<=available ){
-    pMem->z = &zData[offset];
+  if( amt<=available ){
     pMem->flags = MEM_Blob|MEM_Ephem;
     pMem->n = (int)amt;
   }else{
-    rc = vdbeMemFromBtreeResize(pCur, offset, amt, pMem);
+    rc = sqlite3VdbeMemFromBtree(pCur, 0, amt, pMem);
   }
 
   return rc;
@@ -1303,7 +1398,7 @@ struct ValueNewStat4Ctx {
 ** an sqlite3_value within the UnpackedRecord.a[] array.
 */
 static sqlite3_value *valueNew(sqlite3 *db, struct ValueNewStat4Ctx *p){
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
+#ifdef SQLITE_ENABLE_STAT4
   if( p ){
     UnpackedRecord *pRec = p->ppRec[0];
 
@@ -1339,7 +1434,7 @@ static sqlite3_value *valueNew(sqlite3 *db, struct ValueNewStat4Ctx *p){
   }
 #else
   UNUSED_PARAMETER(p);
-#endif /* defined(SQLITE_ENABLE_STAT3_OR_STAT4) */
+#endif /* defined(SQLITE_ENABLE_STAT4) */
   return sqlite3ValueNew(db);
 }
 
@@ -1363,10 +1458,10 @@ static sqlite3_value *valueNew(sqlite3 *db, struct ValueNewStat4Ctx *p){
 ** and sets (*ppVal) to NULL. Or, if an error occurs, (*ppVal) is set to
 ** NULL and an SQLite error code returned.
 */
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
+#ifdef SQLITE_ENABLE_STAT4
 static int valueFromFunction(
   sqlite3 *db,                    /* The database connection */
-  Expr *p,                        /* The expression to evaluate */
+  const Expr *p,                  /* The expression to evaluate */
   u8 enc,                         /* Encoding to use */
   u8 aff,                         /* Affinity to use */
   sqlite3_value **ppVal,          /* Write the new value here */
@@ -1383,8 +1478,10 @@ static int valueFromFunction(
 
   assert( pCtx!=0 );
   assert( (p->flags & EP_TokenOnly)==0 );
+  assert( ExprUseXList(p) );
   pList = p->x.pList;
   if( pList ) nVal = pList->nExpr;
+  assert( !ExprHasProperty(p, EP_IntValue) );
   pFunc = sqlite3FindFunction(db, p->u.zToken, nVal, enc, 0);
   assert( pFunc );
   if( (pFunc->funcFlags & (SQLITE_FUNC_CONSTANT|SQLITE_FUNC_SLOCHNG))==0 
@@ -1411,10 +1508,10 @@ static int valueFromFunction(
     goto value_from_function_out;
   }
 
-  assert( pCtx->pParse->rc==SQLITE_OK );
   memset(&ctx, 0, sizeof(ctx));
   ctx.pOut = pVal;
   ctx.pFunc = pFunc;
+  ctx.enc = ENC(db);
   pFunc->xSFunc(&ctx, nVal, apVal);
   if( ctx.isError ){
     rc = ctx.isError;
@@ -1422,11 +1519,14 @@ static int valueFromFunction(
   }else{
     sqlite3ValueApplyAffinity(pVal, aff, SQLITE_UTF8);
     assert( rc==SQLITE_OK );
+    assert( enc==pVal->enc || db->mallocFailed );
+#if 0  /* Not reachable except after a prior failure */
     rc = sqlite3VdbeChangeEncoding(pVal, enc);
     if( rc==SQLITE_OK && sqlite3VdbeMemTooBig(pVal) ){
       rc = SQLITE_TOOBIG;
       pCtx->pParse->nErr++;
     }
+#endif
   }
   pCtx->pParse->rc = rc;
 
@@ -1446,7 +1546,7 @@ static int valueFromFunction(
 }
 #else
 # define valueFromFunction(a,b,c,d,e,f) SQLITE_OK
-#endif /* defined(SQLITE_ENABLE_STAT3_OR_STAT4) */
+#endif /* defined(SQLITE_ENABLE_STAT4) */
 
 /*
 ** Extract a value from the supplied expression in the manner described
@@ -1460,7 +1560,7 @@ static int valueFromFunction(
 */
 static int valueFromExpr(
   sqlite3 *db,                    /* The database connection */
-  Expr *pExpr,                    /* The expression to evaluate */
+  const Expr *pExpr,              /* The expression to evaluate */
   u8 enc,                         /* Encoding to use */
   u8 affinity,                    /* Affinity to use */
   sqlite3_value **ppVal,          /* Write the new value here */
@@ -1475,11 +1575,7 @@ static int valueFromExpr(
 
   assert( pExpr!=0 );
   while( (op = pExpr->op)==TK_UPLUS || op==TK_SPAN ) pExpr = pExpr->pLeft;
-#if defined(SQLITE_ENABLE_STAT3_OR_STAT4)
   if( op==TK_REGISTER ) op = pExpr->op2;
-#else
-  if( NEVER(op==TK_REGISTER) ) op = pExpr->op2;
-#endif
 
   /* Compressed expressions only appear when parsing the DEFAULT clause
   ** on a table column definition, and hence only when pCtx==0.  This
@@ -1488,12 +1584,14 @@ static int valueFromExpr(
   assert( (pExpr->flags & EP_TokenOnly)==0 || pCtx==0 );
 
   if( op==TK_CAST ){
-    u8 aff = sqlite3AffinityType(pExpr->u.zToken,0);
+    u8 aff;
+    assert( !ExprHasProperty(pExpr, EP_IntValue) );
+    aff = sqlite3AffinityType(pExpr->u.zToken,0);
     rc = valueFromExpr(db, pExpr->pLeft, enc, aff, ppVal, pCtx);
     testcase( rc!=SQLITE_OK );
     if( *ppVal ){
-      sqlite3VdbeMemCast(*ppVal, aff, SQLITE_UTF8);
-      sqlite3ValueApplyAffinity(*ppVal, affinity, SQLITE_UTF8);
+      sqlite3VdbeMemCast(*ppVal, aff, enc);
+      sqlite3ValueApplyAffinity(*ppVal, affinity, enc);
     }
     return rc;
   }
@@ -1542,7 +1640,11 @@ static int valueFromExpr(
       if( pVal->flags & MEM_Real ){
         pVal->u.r = -pVal->u.r;
       }else if( pVal->u.i==SMALLEST_INT64 ){
+#ifndef SQLITE_OMIT_FLOATING_POINT
         pVal->u.r = -(double)SMALLEST_INT64;
+#else
+        pVal->u.r = LARGEST_INT64;
+#endif
         MemSetTypeFlag(pVal, MEM_Real);
       }else{
         pVal->u.i = -pVal->u.i;
@@ -1557,6 +1659,7 @@ static int valueFromExpr(
 #ifndef SQLITE_OMIT_BLOB_LITERAL
   else if( op==TK_BLOB ){
     int nVal;
+    assert( !ExprHasProperty(pExpr, EP_IntValue) );
     assert( pExpr->u.zToken[0]=='x' || pExpr->u.zToken[0]=='X' );
     assert( pExpr->u.zToken[1]=='\'' );
     pVal = valueNew(db, pCtx);
@@ -1568,12 +1671,13 @@ static int valueFromExpr(
                          0, SQLITE_DYNAMIC);
   }
 #endif
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
+#ifdef SQLITE_ENABLE_STAT4
   else if( op==TK_FUNCTION && pCtx!=0 ){
     rc = valueFromFunction(db, pExpr, enc, affinity, &pVal, pCtx);
   }
 #endif
   else if( op==TK_TRUEFALSE ){
+    assert( !ExprHasProperty(pExpr, EP_IntValue) );
     pVal = valueNew(db, pCtx);
     if( pVal ){
       pVal->flags = MEM_Int;
@@ -1585,13 +1689,13 @@ static int valueFromExpr(
   return rc;
 
 no_mem:
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
-  if( pCtx==0 || pCtx->pParse->nErr==0 )
+#ifdef SQLITE_ENABLE_STAT4
+  if( pCtx==0 || NEVER(pCtx->pParse->nErr==0) )
 #endif
     sqlite3OomFault(db);
   sqlite3DbFree(db, zVal);
   assert( *ppVal==0 );
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
+#ifdef SQLITE_ENABLE_STAT4
   if( pCtx==0 ) sqlite3ValueFree(pVal);
 #else
   assert( pCtx==0 ); sqlite3ValueFree(pVal);
@@ -1611,7 +1715,7 @@ no_mem:
 */
 int sqlite3ValueFromExpr(
   sqlite3 *db,              /* The database connection */
-  Expr *pExpr,              /* The expression to evaluate */
+  const Expr *pExpr,        /* The expression to evaluate */
   u8 enc,                   /* Encoding to use */
   u8 affinity,              /* Affinity to use */
   sqlite3_value **ppVal     /* Write the new value here */
@@ -1619,56 +1723,7 @@ int sqlite3ValueFromExpr(
   return pExpr ? valueFromExpr(db, pExpr, enc, affinity, ppVal, 0) : 0;
 }
 
-#ifdef SQLITE_ENABLE_STAT3_OR_STAT4
-/*
-** The implementation of the sqlite_record() function. This function accepts
-** a single argument of any type. The return value is a formatted database 
-** record (a blob) containing the argument value.
-**
-** This is used to convert the value stored in the 'sample' column of the
-** sqlite_stat3 table to the record format SQLite uses internally.
-*/
-static void recordFunc(
-  sqlite3_context *context,
-  int argc,
-  sqlite3_value **argv
-){
-  const int file_format = 1;
-  u32 iSerial;                    /* Serial type */
-  int nSerial;                    /* Bytes of space for iSerial as varint */
-  u32 nVal;                       /* Bytes of space required for argv[0] */
-  int nRet;
-  sqlite3 *db;
-  u8 *aRet;
-
-  UNUSED_PARAMETER( argc );
-  iSerial = sqlite3VdbeSerialType(argv[0], file_format, &nVal);
-  nSerial = sqlite3VarintLen(iSerial);
-  db = sqlite3_context_db_handle(context);
-
-  nRet = 1 + nSerial + nVal;
-  aRet = sqlite3DbMallocRawNN(db, nRet);
-  if( aRet==0 ){
-    sqlite3_result_error_nomem(context);
-  }else{
-    aRet[0] = nSerial+1;
-    putVarint32(&aRet[1], iSerial);
-    sqlite3VdbeSerialPut(&aRet[1+nSerial], argv[0], iSerial);
-    sqlite3_result_blob(context, aRet, nRet, SQLITE_TRANSIENT);
-    sqlite3DbFreeNN(db, aRet);
-  }
-}
-
-/*
-** Register built-in functions used to help read ANALYZE data.
-*/
-void sqlite3AnalyzeFunctions(void){
-  static FuncDef aAnalyzeTableFuncs[] = {
-    FUNCTION(sqlite_record,   1, 0, 0, recordFunc),
-  };
-  sqlite3InsertBuiltinFuncs(aAnalyzeTableFuncs, ArraySize(aAnalyzeTableFuncs));
-}
-
+#ifdef SQLITE_ENABLE_STAT4
 /*
 ** Attempt to extract a value from pExpr and use it to construct *ppVal.
 **
@@ -1918,6 +1973,9 @@ int sqlite3ValueBytes(sqlite3_value *pVal, u8 enc){
   Mem *p = (Mem*)pVal;
   assert( (p->flags & MEM_Null)==0 || (p->flags & (MEM_Str|MEM_Blob))==0 );
   if( (p->flags & MEM_Str)!=0 && pVal->enc==enc ){
+    return p->n;
+  }
+  if( (p->flags & MEM_Str)!=0 && enc!=SQLITE_UTF8 && pVal->enc!=SQLITE_UTF8 ){
     return p->n;
   }
   if( (p->flags & MEM_Blob)!=0 ){

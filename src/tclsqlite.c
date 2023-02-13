@@ -181,6 +181,7 @@ struct SqliteDb {
   int nVMStep;               /* Another statistic for most recent operation */
   int nTransaction;          /* Number of nested [transaction] methods */
   int openFlags;             /* Flags used to open.  (SQLITE_OPEN_URI) */
+  int nRef;                  /* Delete object when this reaches 0 */
 #ifdef SQLITE_TEST
   int bLegacyPrepare;        /* True to use sqlite3_prepare() */
 #endif
@@ -518,63 +519,83 @@ static void flushStmtCache(SqliteDb *pDb){
 }
 
 /*
+** Increment the reference counter on the SqliteDb object. The reference
+** should be released by calling delDatabaseRef().
+*/
+static void addDatabaseRef(SqliteDb *pDb){
+  pDb->nRef++;
+}
+
+/*
+** Decrement the reference counter associated with the SqliteDb object.
+** If it reaches zero, delete the object.
+*/
+static void delDatabaseRef(SqliteDb *pDb){
+  assert( pDb->nRef>0 );
+  pDb->nRef--;
+  if( pDb->nRef==0 ){
+    flushStmtCache(pDb);
+    closeIncrblobChannels(pDb);
+    sqlite3_close(pDb->db);
+    while( pDb->pFunc ){
+      SqlFunc *pFunc = pDb->pFunc;
+      pDb->pFunc = pFunc->pNext;
+      assert( pFunc->pDb==pDb );
+      Tcl_DecrRefCount(pFunc->pScript);
+      Tcl_Free((char*)pFunc);
+    }
+    while( pDb->pCollate ){
+      SqlCollate *pCollate = pDb->pCollate;
+      pDb->pCollate = pCollate->pNext;
+      Tcl_Free((char*)pCollate);
+    }
+    if( pDb->zBusy ){
+      Tcl_Free(pDb->zBusy);
+    }
+    if( pDb->zTrace ){
+      Tcl_Free(pDb->zTrace);
+    }
+    if( pDb->zTraceV2 ){
+      Tcl_Free(pDb->zTraceV2);
+    }
+    if( pDb->zProfile ){
+      Tcl_Free(pDb->zProfile);
+    }
+    if( pDb->zBindFallback ){
+      Tcl_Free(pDb->zBindFallback);
+    }
+    if( pDb->zAuth ){
+      Tcl_Free(pDb->zAuth);
+    }
+    if( pDb->zNull ){
+      Tcl_Free(pDb->zNull);
+    }
+    if( pDb->pUpdateHook ){
+      Tcl_DecrRefCount(pDb->pUpdateHook);
+    }
+    if( pDb->pPreUpdateHook ){
+      Tcl_DecrRefCount(pDb->pPreUpdateHook);
+    }
+    if( pDb->pRollbackHook ){
+      Tcl_DecrRefCount(pDb->pRollbackHook);
+    }
+    if( pDb->pWalHook ){
+      Tcl_DecrRefCount(pDb->pWalHook);
+    }
+    if( pDb->pCollateNeeded ){
+      Tcl_DecrRefCount(pDb->pCollateNeeded);
+    }
+    Tcl_Free((char*)pDb);
+  }
+}
+
+/*
 ** TCL calls this procedure when an sqlite3 database command is
 ** deleted.
 */
 static void SQLITE_TCLAPI DbDeleteCmd(void *db){
   SqliteDb *pDb = (SqliteDb*)db;
-  flushStmtCache(pDb);
-  closeIncrblobChannels(pDb);
-  sqlite3_close(pDb->db);
-  while( pDb->pFunc ){
-    SqlFunc *pFunc = pDb->pFunc;
-    pDb->pFunc = pFunc->pNext;
-    assert( pFunc->pDb==pDb );
-    Tcl_DecrRefCount(pFunc->pScript);
-    Tcl_Free((char*)pFunc);
-  }
-  while( pDb->pCollate ){
-    SqlCollate *pCollate = pDb->pCollate;
-    pDb->pCollate = pCollate->pNext;
-    Tcl_Free((char*)pCollate);
-  }
-  if( pDb->zBusy ){
-    Tcl_Free(pDb->zBusy);
-  }
-  if( pDb->zTrace ){
-    Tcl_Free(pDb->zTrace);
-  }
-  if( pDb->zTraceV2 ){
-    Tcl_Free(pDb->zTraceV2);
-  }
-  if( pDb->zProfile ){
-    Tcl_Free(pDb->zProfile);
-  }
-  if( pDb->zBindFallback ){
-    Tcl_Free(pDb->zBindFallback);
-  }
-  if( pDb->zAuth ){
-    Tcl_Free(pDb->zAuth);
-  }
-  if( pDb->zNull ){
-    Tcl_Free(pDb->zNull);
-  }
-  if( pDb->pUpdateHook ){
-    Tcl_DecrRefCount(pDb->pUpdateHook);
-  }
-  if( pDb->pPreUpdateHook ){
-    Tcl_DecrRefCount(pDb->pPreUpdateHook);
-  }
-  if( pDb->pRollbackHook ){
-    Tcl_DecrRefCount(pDb->pRollbackHook);
-  }
-  if( pDb->pWalHook ){
-    Tcl_DecrRefCount(pDb->pWalHook);
-  }
-  if( pDb->pCollateNeeded ){
-    Tcl_DecrRefCount(pDb->pCollateNeeded);
-  }
-  Tcl_Free((char*)pDb);
+  delDatabaseRef(pDb);
 }
 
 /*
@@ -1246,6 +1267,7 @@ static int SQLITE_TCLAPI DbTransPostCmd(
   }
   pDb->disableAuth--;
 
+  delDatabaseRef(pDb);
   return rc;
 }
 
@@ -1579,6 +1601,7 @@ static void dbEvalInit(
     Tcl_IncrRefCount(pArray);
   }
   p->evalFlags = evalFlags;
+  addDatabaseRef(p->pDb);
 }
 
 /*
@@ -1719,6 +1742,7 @@ static void dbEvalFinalize(DbEvalContext *p){
   }
   Tcl_DecrRefCount(p->pSql);
   dbReleaseColumnNames(p);
+  delDatabaseRef(p->pDb);
 }
 
 /*
@@ -1917,33 +1941,34 @@ static int SQLITE_TCLAPI DbObjCmd(
     "authorizer",             "backup",                "bind_fallback",
     "busy",                   "cache",                 "changes",
     "close",                  "collate",               "collation_needed",
-    "commit_hook",            "complete",              "copy",
-    "deserialize",            "enable_load_extension", "errorcode",
-    "eval",                   "exists",                "function",
-    "incrblob",               "interrupt",             "last_insert_rowid",
-    "nullvalue",              "onecolumn",             "preupdate",
-    "profile",                "progress",              "rekey",
-    "restore",                "rollback_hook",         "serialize",
-    "status",                 "timeout",               "total_changes",
-    "trace",                  "trace_v2",              "transaction",
-    "unlock_notify",          "update_hook",           "version",
-    "wal_hook",               0                        
+    "commit_hook",            "complete",              "config",
+    "copy",                   "deserialize",           "enable_load_extension",
+    "errorcode",              "erroroffset",           "eval",
+    "exists",                 "function",              "incrblob",
+    "interrupt",              "last_insert_rowid",     "nullvalue",
+    "onecolumn",              "preupdate",             "profile",
+    "progress",               "rekey",                 "restore",
+    "rollback_hook",          "serialize",             "status",
+    "timeout",                "total_changes",         "trace",
+    "trace_v2",               "transaction",           "unlock_notify",
+    "update_hook",            "version",               "wal_hook",
+    0                        
   };
   enum DB_enum {
     DB_AUTHORIZER,            DB_BACKUP,               DB_BIND_FALLBACK,
     DB_BUSY,                  DB_CACHE,                DB_CHANGES,
     DB_CLOSE,                 DB_COLLATE,              DB_COLLATION_NEEDED,
-    DB_COMMIT_HOOK,           DB_COMPLETE,             DB_COPY,
-    DB_DESERIALIZE,           DB_ENABLE_LOAD_EXTENSION,DB_ERRORCODE,
-    DB_EVAL,                  DB_EXISTS,               DB_FUNCTION,
-    DB_INCRBLOB,              DB_INTERRUPT,            DB_LAST_INSERT_ROWID,
-    DB_NULLVALUE,             DB_ONECOLUMN,            DB_PREUPDATE,
-    DB_PROFILE,               DB_PROGRESS,             DB_REKEY,
-    DB_RESTORE,               DB_ROLLBACK_HOOK,        DB_SERIALIZE,
-    DB_STATUS,                DB_TIMEOUT,              DB_TOTAL_CHANGES,
-    DB_TRACE,                 DB_TRACE_V2,             DB_TRANSACTION,
-    DB_UNLOCK_NOTIFY,         DB_UPDATE_HOOK,          DB_VERSION,
-    DB_WAL_HOOK             
+    DB_COMMIT_HOOK,           DB_COMPLETE,             DB_CONFIG,
+    DB_COPY,                  DB_DESERIALIZE,          DB_ENABLE_LOAD_EXTENSION,
+    DB_ERRORCODE,             DB_ERROROFFSET,          DB_EVAL,
+    DB_EXISTS,                DB_FUNCTION,             DB_INCRBLOB,
+    DB_INTERRUPT,             DB_LAST_INSERT_ROWID,    DB_NULLVALUE,
+    DB_ONECOLUMN,             DB_PREUPDATE,            DB_PROFILE,
+    DB_PROGRESS,              DB_REKEY,                DB_RESTORE,
+    DB_ROLLBACK_HOOK,         DB_SERIALIZE,            DB_STATUS,
+    DB_TIMEOUT,               DB_TOTAL_CHANGES,        DB_TRACE,
+    DB_TRACE_V2,              DB_TRANSACTION,          DB_UNLOCK_NOTIFY,
+    DB_UPDATE_HOOK,           DB_VERSION,              DB_WAL_HOOK,
   };
   /* don't leave trailing commas on DB_enum, it confuses the AIX xlc compiler */
 
@@ -2207,7 +2232,7 @@ static int SQLITE_TCLAPI DbObjCmd(
       return TCL_ERROR;
     }
     pResult = Tcl_GetObjResult(interp);
-    Tcl_SetIntObj(pResult, sqlite3_changes(pDb->db));
+    Tcl_SetWideIntObj(pResult, sqlite3_changes64(pDb->db));
     break;
   }
 
@@ -2328,6 +2353,76 @@ static int SQLITE_TCLAPI DbObjCmd(
     pResult = Tcl_GetObjResult(interp);
     Tcl_SetBooleanObj(pResult, isComplete);
 #endif
+    break;
+  }
+
+  /*    $db config ?OPTION? ?BOOLEAN?
+  **
+  ** Configure the database connection using the sqlite3_db_config()
+  ** interface.
+  */
+  case DB_CONFIG: {
+    static const struct DbConfigChoices {
+      const char *zName;
+      int op;
+    } aDbConfig[] = {
+        { "defensive",          SQLITE_DBCONFIG_DEFENSIVE             },
+        { "dqs_ddl",            SQLITE_DBCONFIG_DQS_DDL               },
+        { "dqs_dml",            SQLITE_DBCONFIG_DQS_DML               },
+        { "enable_fkey",        SQLITE_DBCONFIG_ENABLE_FKEY           },
+        { "enable_qpsg",        SQLITE_DBCONFIG_ENABLE_QPSG           },
+        { "enable_trigger",     SQLITE_DBCONFIG_ENABLE_TRIGGER        },
+        { "enable_view",        SQLITE_DBCONFIG_ENABLE_VIEW           },
+        { "fts3_tokenizer",     SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER },
+        { "legacy_alter_table", SQLITE_DBCONFIG_LEGACY_ALTER_TABLE    },
+        { "legacy_file_format", SQLITE_DBCONFIG_LEGACY_FILE_FORMAT    },
+        { "load_extension",     SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION },
+        { "no_ckpt_on_close",   SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE      },
+        { "reset_database",     SQLITE_DBCONFIG_RESET_DATABASE        },
+        { "trigger_eqp",        SQLITE_DBCONFIG_TRIGGER_EQP           },
+        { "trusted_schema",     SQLITE_DBCONFIG_TRUSTED_SCHEMA        },
+        { "writable_schema",    SQLITE_DBCONFIG_WRITABLE_SCHEMA       },
+    };
+    Tcl_Obj *pResult;
+    int ii;
+    if( objc>4 ){
+      Tcl_WrongNumArgs(interp, 2, objv, "?OPTION? ?BOOLEAN?");
+      return TCL_ERROR;
+    }
+    if( objc==2 ){
+      /* With no arguments, list all configuration options and with the
+      ** current value */
+      pResult = Tcl_NewListObj(0,0);
+      for(ii=0; ii<sizeof(aDbConfig)/sizeof(aDbConfig[0]); ii++){
+        int v = 0;
+        sqlite3_db_config(pDb->db, aDbConfig[ii].op, -1, &v);
+        Tcl_ListObjAppendElement(interp, pResult,
+           Tcl_NewStringObj(aDbConfig[ii].zName,-1));
+        Tcl_ListObjAppendElement(interp, pResult,
+           Tcl_NewIntObj(v));
+      }
+    }else{
+      const char *zOpt = Tcl_GetString(objv[2]);
+      int onoff = -1;
+      int v = 0;
+      if( zOpt[0]=='-' ) zOpt++;
+      for(ii=0; ii<sizeof(aDbConfig)/sizeof(aDbConfig[0]); ii++){
+        if( strcmp(aDbConfig[ii].zName, zOpt)==0 ) break;
+      }
+      if( ii>=sizeof(aDbConfig)/sizeof(aDbConfig[0]) ){
+        Tcl_AppendResult(interp, "unknown config option: \"", zOpt,
+                                "\"", (void*)0);
+        return TCL_ERROR;
+      }
+      if( objc==4 ){
+        if( Tcl_GetBooleanFromObj(interp, objv[3], &onoff) ){
+          return TCL_ERROR;
+        }
+      }
+      sqlite3_db_config(pDb->db, aDbConfig[ii].op, onoff, &v);
+      pResult = Tcl_NewIntObj(v);
+    }
+    Tcl_SetObjResult(interp, pResult);
     break;
   }
 
@@ -2530,7 +2625,7 @@ static int SQLITE_TCLAPI DbObjCmd(
   ** Reopen DATABASE (default "main") using the content in $VALUE
   */
   case DB_DESERIALIZE: {
-#ifndef SQLITE_ENABLE_DESERIALIZE
+#ifdef SQLITE_OMIT_DESERIALIZE
     Tcl_AppendResult(interp, "MEMDB not available in this build",
                      (char*)0);
     rc = TCL_ERROR;
@@ -2553,8 +2648,10 @@ static int SQLITE_TCLAPI DbObjCmd(
     for(i=2; i<objc-1; i++){
       const char *z = Tcl_GetString(objv[i]);
       if( strcmp(z,"-maxsize")==0 && i<objc-2 ){
-        rc = Tcl_GetWideIntFromObj(interp, objv[++i], &mxSize);
+        Tcl_WideInt x;
+        rc = Tcl_GetWideIntFromObj(interp, objv[++i], &x);
         if( rc ) goto deserialize_error;
+        mxSize = x;
         continue;
       }
       if( strcmp(z,"-readonly")==0 && i<objc-2 ){
@@ -2631,6 +2728,17 @@ deserialize_error:
   */
   case DB_ERRORCODE: {
     Tcl_SetObjResult(interp, Tcl_NewIntObj(sqlite3_errcode(pDb->db)));
+    break;
+  }
+
+  /*
+  **    $db erroroffset
+  **
+  ** Return the numeric error code that was returned by the most recent
+  ** call to sqlite3_exec().
+  */
+  case DB_ERROROFFSET: {
+    Tcl_SetObjResult(interp, Tcl_NewIntObj(sqlite3_error_offset(pDb->db)));
     break;
   }
 
@@ -2741,10 +2849,17 @@ deserialize_error:
   }
 
   /*
-  **     $db function NAME [-argcount N] [-deterministic] SCRIPT
+  **     $db function NAME [OPTIONS] SCRIPT
   **
   ** Create a new SQL function called NAME.  Whenever that function is
   ** called, invoke SCRIPT to evaluate the function.
+  **
+  ** Options:
+  **         --argcount N           Function has exactly N arguments
+  **         --deterministic        The function is pure
+  **         --directonly           Prohibit use inside triggers and views
+  **         --innocuous            Has no side effects or information leaks
+  **         --returntype TYPE      Specify the return type of the function
   */
   case DB_FUNCTION: {
     int flags = SQLITE_UTF8;
@@ -2777,6 +2892,12 @@ deserialize_error:
       if( n>1 && strncmp(z, "-deterministic",n)==0 ){
         flags |= SQLITE_DETERMINISTIC;
       }else
+      if( n>1 && strncmp(z, "-directonly",n)==0 ){
+        flags |= SQLITE_DIRECTONLY;
+      }else
+      if( n>1 && strncmp(z, "-innocuous",n)==0 ){
+        flags |= SQLITE_INNOCUOUS;
+      }else
       if( n>1 && strncmp(z, "-returntype", n)==0 ){
         const char *azType[] = {"integer", "real", "text", "blob", "any", 0};
         assert( SQLITE_INTEGER==1 && SQLITE_FLOAT==2 && SQLITE_TEXT==3 );
@@ -2792,7 +2913,8 @@ deserialize_error:
         eType++;
       }else{
         Tcl_AppendResult(interp, "bad option \"", z,
-            "\": must be -argcount, -deterministic or -returntype", (char*)0
+            "\": must be -argcount, -deterministic, -directonly,"
+            " -innocuous, or -returntype", (char*)0
         );
         return TCL_ERROR;
       }
@@ -2843,7 +2965,7 @@ deserialize_error:
     }
 
     if( objc==(6+isReadonly) ){
-      zDb = Tcl_GetString(objv[2]);
+      zDb = Tcl_GetString(objv[2+isReadonly]);
     }
     zTable = Tcl_GetString(objv[objc-3]);
     zColumn = Tcl_GetString(objv[objc-2]);
@@ -2932,6 +3054,9 @@ deserialize_error:
       if( pDb->zProgress ){
         Tcl_AppendResult(interp, pDb->zProgress, (char*)0);
       }
+#ifndef SQLITE_OMIT_PROGRESS_CALLBACK
+      sqlite3_progress_handler(pDb->db, 0, 0, 0);
+#endif
     }else if( objc==4 ){
       char *zProgress;
       int len;
@@ -3010,22 +3135,10 @@ deserialize_error:
   ** Change the encryption key on the currently open database.
   */
   case DB_REKEY: {
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-    int nKey;
-    void *pKey;
-#endif
     if( objc!=3 ){
       Tcl_WrongNumArgs(interp, 2, objv, "KEY");
       return TCL_ERROR;
     }
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-    pKey = Tcl_GetByteArrayFromObj(objv[2], &nKey);
-    rc = sqlite3_rekey(pDb->db, pKey, nKey);
-    if( rc ){
-      Tcl_AppendResult(interp, sqlite3_errstr(rc), (char*)0);
-      rc = TCL_ERROR;
-    }
-#endif
     break;
   }
 
@@ -3095,7 +3208,7 @@ deserialize_error:
   ** Return a serialization of a database.  
   */
   case DB_SERIALIZE: {
-#ifndef SQLITE_ENABLE_DESERIALIZE
+#ifdef SQLITE_OMIT_DESERIALIZE
     Tcl_AppendResult(interp, "MEMDB not available in this build",
                      (char*)0);
     rc = TCL_ERROR;
@@ -3183,7 +3296,7 @@ deserialize_error:
       return TCL_ERROR;
     }
     pResult = Tcl_GetObjResult(interp);
-    Tcl_SetIntObj(pResult, sqlite3_total_changes(pDb->db));
+    Tcl_SetWideIntObj(pResult, sqlite3_total_changes64(pDb->db));
     break;
   }
 
@@ -3363,6 +3476,7 @@ deserialize_error:
     ** opened above. If not using NRE, evaluate the script directly, then
     ** call function DbTransPostCmd() to commit (or rollback) the transaction
     ** or savepoint.  */
+    addDatabaseRef(pDb);          /* DbTransPostCmd() calls delDatabaseRef() */
     if( DbUseNre() ){
       Tcl_NRAddCallback(interp, DbTransPostCmd, cd, 0, 0, 0);
       (void)Tcl_NREvalObj(interp, pScript, 0);
@@ -3592,10 +3706,8 @@ static int sqliteCmdUsage(
 ){
   Tcl_WrongNumArgs(interp, 1, objv,
     "HANDLE ?FILENAME? ?-vfs VFSNAME? ?-readonly BOOLEAN? ?-create BOOLEAN?"
+    " ?-nofollow BOOLEAN?"
     " ?-nomutex BOOLEAN? ?-fullmutex BOOLEAN? ?-uri BOOLEAN?"
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-    " ?-key CODECKEY?"
-#endif
   );
   return TCL_ERROR;
 }
@@ -3603,6 +3715,7 @@ static int sqliteCmdUsage(
 /*
 **   sqlite3 DBNAME FILENAME ?-vfs VFSNAME? ?-key KEY? ?-readonly BOOLEAN?
 **                           ?-create BOOLEAN? ?-nomutex BOOLEAN?
+**                           ?-nofollow BOOLEAN?
 **
 ** This is the main Tcl command.  When the "sqlite" Tcl command is
 ** invoked, this routine runs to process that command.
@@ -3628,11 +3741,8 @@ static int SQLITE_TCLAPI DbMain(
   const char *zFile = 0;
   const char *zVfs = 0;
   int flags;
+  int bTranslateFileName = 1;
   Tcl_DString translatedFilename;
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-  void *pKey = 0;
-  int nKey = 0;
-#endif
   int rc;
 
   /* In normal use, each TCL interpreter runs in a single thread.  So
@@ -3659,11 +3769,7 @@ static int SQLITE_TCLAPI DbMain(
       return TCL_OK;
     }
     if( strcmp(zArg,"-has-codec")==0 ){
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-      Tcl_AppendResult(interp,"1",(char*)0);
-#else
       Tcl_AppendResult(interp,"0",(char*)0);
-#endif
       return TCL_OK;
     }
     if( zArg[0]=='-' ) return sqliteCmdUsage(interp, objv);
@@ -3678,9 +3784,7 @@ static int SQLITE_TCLAPI DbMain(
     if( i==objc-1 ) return sqliteCmdUsage(interp, objv);
     i++;
     if( strcmp(zArg,"-key")==0 ){
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-      pKey = Tcl_GetByteArrayFromObj(objv[i], &nKey);
-#endif
+      /* no-op */
     }else if( strcmp(zArg, "-vfs")==0 ){
       zVfs = Tcl_GetString(objv[i]);
     }else if( strcmp(zArg, "-readonly")==0 ){
@@ -3700,6 +3804,14 @@ static int SQLITE_TCLAPI DbMain(
         flags |= SQLITE_OPEN_CREATE;
       }else{
         flags &= ~SQLITE_OPEN_CREATE;
+      }
+    }else if( strcmp(zArg, "-nofollow")==0 ){
+      int b;
+      if( Tcl_GetBooleanFromObj(interp, objv[i], &b) ) return TCL_ERROR;
+      if( b ){
+        flags |= SQLITE_OPEN_NOFOLLOW;
+      }else{
+        flags &= ~SQLITE_OPEN_NOFOLLOW;
       }
     }else if( strcmp(zArg, "-nomutex")==0 ){
       int b;
@@ -3727,6 +3839,10 @@ static int SQLITE_TCLAPI DbMain(
       }else{
         flags &= ~SQLITE_OPEN_URI;
       }
+    }else if( strcmp(zArg, "-translatefilename")==0 ){
+      if( Tcl_GetBooleanFromObj(interp, objv[i], &bTranslateFileName) ){
+        return TCL_ERROR;
+      }
     }else{
       Tcl_AppendResult(interp, "unknown option: ", zArg, (char*)0);
       return TCL_ERROR;
@@ -3736,9 +3852,13 @@ static int SQLITE_TCLAPI DbMain(
   p = (SqliteDb*)Tcl_Alloc( sizeof(*p) );
   memset(p, 0, sizeof(*p));
   if( zFile==0 ) zFile = "";
-  zFile = Tcl_TranslateFileName(interp, zFile, &translatedFilename);
+  if( bTranslateFileName ){
+    zFile = Tcl_TranslateFileName(interp, zFile, &translatedFilename);
+  }
   rc = sqlite3_open_v2(zFile, &p->db, flags, zVfs);
-  Tcl_DStringFree(&translatedFilename);
+  if( bTranslateFileName ){
+    Tcl_DStringFree(&translatedFilename);
+  }
   if( p->db ){
     if( SQLITE_OK!=sqlite3_errcode(p->db) ){
       zErrMsg = sqlite3_mprintf("%s", sqlite3_errmsg(p->db));
@@ -3748,11 +3868,6 @@ static int SQLITE_TCLAPI DbMain(
   }else{
     zErrMsg = sqlite3_mprintf("%s", sqlite3_errstr(rc));
   }
-#if defined(SQLITE_HAS_CODEC) && !defined(SQLITE_OMIT_CODEC_FROM_TCL)
-  if( p->db ){
-    sqlite3_key(p->db, pKey, nKey);
-  }
-#endif
   if( p->db==0 ){
     Tcl_SetResult(interp, zErrMsg, TCL_VOLATILE);
     Tcl_Free((char*)p);
@@ -3769,6 +3884,7 @@ static int SQLITE_TCLAPI DbMain(
   }else{
     Tcl_CreateObjCommand(interp, zArg, DbObjCmd, (char*)p, DbDeleteCmd);
   }
+  p->nRef = 1;
   return TCL_OK;
 }
 
@@ -3876,7 +3992,9 @@ static const char *tclsh_main_loop(void){
   return zMainloop;
 }
 
-#define TCLSH_MAIN main   /* Needed to fake out mktclapp */
+#ifndef TCLSH_MAIN
+# define TCLSH_MAIN main
+#endif
 int SQLITE_CDECL TCLSH_MAIN(int argc, char **argv){
   Tcl_Interp *interp;
   int i;

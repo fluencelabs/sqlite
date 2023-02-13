@@ -188,6 +188,10 @@ static u32 countLookasideSlots(LookasideSlot *p){
 int sqlite3LookasideUsed(sqlite3 *db, int *pHighwater){
   u32 nInit = countLookasideSlots(db->lookaside.pInit);
   u32 nFree = countLookasideSlots(db->lookaside.pFree);
+#ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+  nInit += countLookasideSlots(db->lookaside.pSmallInit);
+  nFree += countLookasideSlots(db->lookaside.pSmallFree);
+#endif /* SQLITE_OMIT_TWOSIZE_LOOKASIDE */
   if( pHighwater ) *pHighwater = db->lookaside.nSlot - nInit;
   return db->lookaside.nSlot - (nInit+nFree);
 }
@@ -220,6 +224,15 @@ int sqlite3_db_status(
           db->lookaside.pInit = db->lookaside.pFree;
           db->lookaside.pFree = 0;
         }
+#ifndef SQLITE_OMIT_TWOSIZE_LOOKASIDE
+        p = db->lookaside.pSmallFree;
+        if( p ){
+          while( p->pNext ) p = p->pNext;
+          p->pNext = db->lookaside.pSmallInit;
+          db->lookaside.pSmallInit = db->lookaside.pSmallFree;
+          db->lookaside.pSmallFree = 0;
+        }
+#endif
       }
       break;
     }
@@ -278,6 +291,8 @@ int sqlite3_db_status(
 
       sqlite3BtreeEnterAll(db);
       db->pnBytesFreed = &nByte;
+      assert( db->lookaside.pEnd==db->lookaside.pTrueEnd );
+      db->lookaside.pEnd = db->lookaside.pStart;
       for(i=0; i<db->nDb; i++){
         Schema *pSchema = db->aDb[i].pSchema;
         if( ALWAYS(pSchema!=0) ){
@@ -303,6 +318,7 @@ int sqlite3_db_status(
         }
       }
       db->pnBytesFreed = 0;
+      db->lookaside.pEnd = db->lookaside.pTrueEnd;
       sqlite3BtreeLeaveAll(db);
 
       *pHighwater = 0;
@@ -320,10 +336,12 @@ int sqlite3_db_status(
       int nByte = 0;              /* Used to accumulate return value */
 
       db->pnBytesFreed = &nByte;
-      for(pVdbe=db->pVdbe; pVdbe; pVdbe=pVdbe->pNext){
-        sqlite3VdbeClearObject(db, pVdbe);
-        sqlite3DbFree(db, pVdbe);
+      assert( db->lookaside.pEnd==db->lookaside.pTrueEnd );
+      db->lookaside.pEnd = db->lookaside.pStart;
+      for(pVdbe=db->pVdbe; pVdbe; pVdbe=pVdbe->pVNext){
+        sqlite3VdbeDelete(pVdbe);
       }
+      db->lookaside.pEnd = db->lookaside.pTrueEnd;
       db->pnBytesFreed = 0;
 
       *pHighwater = 0;  /* IMP: R-64479-57858 */
@@ -339,7 +357,7 @@ int sqlite3_db_status(
     */
     case SQLITE_DBSTATUS_CACHE_SPILL:
       op = SQLITE_DBSTATUS_CACHE_WRITE+1;
-      /* Fall through into the next case */
+      /* no break */ deliberate_fall_through
     case SQLITE_DBSTATUS_CACHE_HIT:
     case SQLITE_DBSTATUS_CACHE_MISS:
     case SQLITE_DBSTATUS_CACHE_WRITE:{
