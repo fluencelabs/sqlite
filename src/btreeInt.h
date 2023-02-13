@@ -272,7 +272,6 @@ typedef struct CellInfo CellInfo;
 */
 struct MemPage {
   u8 isInit;           /* True if previously initialized. MUST BE FIRST! */
-  u8 bBusy;            /* Prevent endless loops on corrupt database files */
   u8 intKey;           /* True if table b-trees.  False for index b-trees */
   u8 intKeyLeaf;       /* True if the leaf of an intKey table */
   Pgno pgno;           /* Page number for this page */
@@ -294,7 +293,9 @@ struct MemPage {
   u8 *apOvfl[4];       /* Pointers to the body of overflow cells */
   BtShared *pBt;       /* Pointer to BtShared that this page is part of */
   u8 *aData;           /* Pointer to disk image of the page data */
-  u8 *aDataEnd;        /* One byte past the end of usable data */
+  u8 *aDataEnd;        /* One byte past the end of the entire page - not just
+                       ** the usable space, the entire page.  Used to prevent
+                       ** corruption-induced buffer overflow. */
   u8 *aCellIdx;        /* The cell index area */
   u8 *aDataOfst;       /* Same as aData for leaves.  aData+4 for interior */
   DbPage *pDbPage;     /* Pager page handle */
@@ -350,9 +351,12 @@ struct Btree {
   u8 hasIncrblobCur; /* True if there are one or more Incrblob cursors */
   int wantToLock;    /* Number of nested calls to sqlite3BtreeEnter() */
   int nBackup;       /* Number of backup operations reading this btree */
-  u32 iDataVersion;  /* Combines with pBt->pPager->iDataVersion */
+  u32 iBDataVersion; /* Combines with pBt->pPager->iDataVersion */
   Btree *pNext;      /* List of other sharable Btrees from the same db */
   Btree *pPrev;      /* Back pointer of the same list */
+#ifdef SQLITE_DEBUG
+  u64 nSeek;         /* Calls to sqlite3BtreeMovetoUnpacked() */
+#endif
 #ifndef SQLITE_OMIT_SHARED_CACHE
   BtLock lock;       /* Object used to lock page 1 */
 #endif
@@ -364,10 +368,24 @@ struct Btree {
 ** If the shared-data extension is enabled, there may be multiple users
 ** of the Btree structure. At most one of these may open a write transaction,
 ** but any number may have active read transactions.
+**
+** These values must match SQLITE_TXN_NONE, SQLITE_TXN_READ, and
+** SQLITE_TXN_WRITE
 */
 #define TRANS_NONE  0
 #define TRANS_READ  1
 #define TRANS_WRITE 2
+
+#if TRANS_NONE!=SQLITE_TXN_NONE
+# error wrong numeric code for no-transaction
+#endif
+#if TRANS_READ!=SQLITE_TXN_READ
+# error wrong numeric code for read-transaction
+#endif
+#if TRANS_WRITE!=SQLITE_TXN_WRITE
+# error wrong numeric code for write-transaction
+#endif
+
 
 /*
 ** An instance of this object represents a single database file.
@@ -381,7 +399,7 @@ struct Btree {
 **
 ** Fields in this structure are accessed under the BtShared.mutex
 ** mutex, except for nRef and pNext which are accessed under the
-** global SQLITE_MUTEX_STATIC_MASTER mutex.  The pPager field
+** global SQLITE_MUTEX_STATIC_MAIN mutex.  The pPager field
 ** may not be modified once it is initially set as long as nRef>0.
 ** The pSchema field may be set once under BtShared.mutex and
 ** thereafter is unchanged as long as nRef>0.
@@ -417,9 +435,7 @@ struct BtShared {
 #endif
   u8 inTransaction;     /* Transaction state */
   u8 max1bytePayload;   /* Maximum first byte of cell for a 1-byte payload */
-#ifdef SQLITE_HAS_CODEC
-  u8 optimalReserve;    /* Desired amount of reserved space per page */
-#endif
+  u8 nReserveWanted;    /* Desired number of extra bytes per page */
   u16 btsFlags;         /* Boolean parameters.  See BTS_* macros below */
   u16 maxLocal;         /* Maximum local payload in non-LEAFDATA tables */
   u16 minLocal;         /* Minimum local payload in non-LEAFDATA tables */
@@ -440,6 +456,7 @@ struct BtShared {
   Btree *pWriter;       /* Btree with currently open write transaction */
 #endif
   u8 *pTmpSpace;        /* Temp space sufficient to hold a single cell */
+  int nPreformatSize;   /* Size of last cell written by TransferRow() */
 };
 
 /*
@@ -542,6 +559,7 @@ struct BtCursor {
 #define BTCF_AtLast       0x08   /* Cursor is pointing ot the last entry */
 #define BTCF_Incrblob     0x10   /* True if an incremental I/O handle */
 #define BTCF_Multiple     0x20   /* Maybe another cursor on the same btree */
+#define BTCF_Pinned       0x40   /* Cursor is busy and cannot be moved */
 
 /*
 ** Potential values for BtCursor.eState.
@@ -582,7 +600,7 @@ struct BtCursor {
 /* 
 ** The database page the PENDING_BYTE occupies. This page is never used.
 */
-# define PENDING_BYTE_PAGE(pBt) PAGER_MJ_PGNO(pBt)
+#define PENDING_BYTE_PAGE(pBt)  ((Pgno)((PENDING_BYTE/((pBt)->pageSize))+1))
 
 /*
 ** These macros define the location of the pointer-map entry for a 
@@ -656,15 +674,15 @@ struct BtCursor {
 ** So, this macro is defined instead.
 */
 #ifndef SQLITE_OMIT_AUTOVACUUM
-#define ISAUTOVACUUM (pBt->autoVacuum)
+#define ISAUTOVACUUM(pBt) (pBt->autoVacuum)
 #else
-#define ISAUTOVACUUM 0
+#define ISAUTOVACUUM(pBt) 0
 #endif
 
 
 /*
-** This structure is passed around through all the sanity checking routines
-** in order to keep track of some global state information.
+** This structure is passed around through all the PRAGMA integrity_check
+** checking routines in order to keep track of some global state information.
 **
 ** The aRef[] array is allocated so that there is 1 bit for each page in
 ** the database. As the integrity-check proceeds, for each page used in
@@ -680,11 +698,14 @@ struct IntegrityCk {
   Pgno nPage;       /* Number of pages in the database */
   int mxErr;        /* Stop accumulating errors when this reaches zero */
   int nErr;         /* Number of messages written to zErrMsg so far */
-  int mallocFailed; /* A memory allocation error has occurred */
+  int rc;           /* SQLITE_OK, SQLITE_NOMEM, or SQLITE_INTERRUPT */
+  u32 nStep;        /* Number of steps into the integrity_check process */
   const char *zPfx; /* Error message prefix */
-  int v1, v2;       /* Values for up to two %d fields in zPfx */
+  Pgno v1;          /* Value for first %u substitution in zPfx */
+  int v2;           /* Value for second %d substitution in zPfx */
   StrAccum errMsg;  /* Accumulate the error message text here */
   u32 *heap;        /* Min-heap used for analyzing cell coverage */
+  sqlite3 *db;      /* Database connection running the check */
 };
 
 /*
