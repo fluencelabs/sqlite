@@ -11,20 +11,21 @@
 ** is substantially reduced.  This is important for embedded applications
 ** on platforms with limited memory.
 */
-/* Hash score: 227 */
-/* zKWText[] encodes 984 bytes of keyword text in 648 bytes */
+/* Hash score: 231 */
+/* zKWText[] encodes 1007 bytes of keyword text in 667 bytes */
 /*   REINDEXEDESCAPEACHECKEYBEFOREIGNOREGEXPLAINSTEADDATABASELECT       */
 /*   ABLEFTHENDEFERRABLELSEXCLUDELETEMPORARYISNULLSAVEPOINTERSECT       */
 /*   IESNOTNULLIKEXCEPTRANSACTIONATURALTERAISEXCLUSIVEXISTS             */
 /*   CONSTRAINTOFFSETRIGGERANGENERATEDETACHAVINGLOBEGINNEREFERENCES     */
 /*   UNIQUERYWITHOUTERELEASEATTACHBETWEENOTHINGROUPSCASCADEFAULT        */
 /*   CASECOLLATECREATECURRENT_DATEIMMEDIATEJOINSERTMATCHPLANALYZE       */
-/*   PRAGMABORTUPDATEVALUESVIRTUALWAYSWHENWHERECURSIVEAFTERENAMEAND     */
-/*   EFERREDISTINCTAUTOINCREMENTCASTCOLUMNCOMMITCONFLICTCROSS           */
-/*   CURRENT_TIMESTAMPARTITIONDROPRECEDINGFAILASTFILTEREPLACEFIRST      */
-/*   FOLLOWINGFROMFULLIMITIFORDERESTRICTOTHERSOVERIGHTROLLBACKROWS      */
-/*   UNBOUNDEDUNIONUSINGVACUUMVIEWINDOWBYINITIALLYPRIMARY               */
-static const char zKWText[647] = {
+/*   PRAGMATERIALIZEDEFERREDISTINCTUPDATEVALUESVIRTUALWAYSWHENWHERE     */
+/*   CURSIVEABORTAFTERENAMEANDROPARTITIONAUTOINCREMENTCASTCOLUMN        */
+/*   COMMITCONFLICTCROSSCURRENT_TIMESTAMPRECEDINGFAILASTFILTER          */
+/*   EPLACEFIRSTFOLLOWINGFROMFULLIMITIFORDERESTRICTOTHERSOVER           */
+/*   ETURNINGRIGHTROLLBACKROWSUNBOUNDEDUNIONUSINGVACUUMVIEWINDOWBY      */
+/*   INITIALLYPRIMARY                                                   */
+static const char zKWText[666] = {
   'R','E','I','N','D','E','X','E','D','E','S','C','A','P','E','A','C','H',
   'E','C','K','E','Y','B','E','F','O','R','E','I','G','N','O','R','E','G',
   'E','X','P','L','A','I','N','S','T','E','A','D','D','A','T','A','B','A',
@@ -45,86 +46,87 @@ static const char zKWText[647] = {
   'C','R','E','A','T','E','C','U','R','R','E','N','T','_','D','A','T','E',
   'I','M','M','E','D','I','A','T','E','J','O','I','N','S','E','R','T','M',
   'A','T','C','H','P','L','A','N','A','L','Y','Z','E','P','R','A','G','M',
-  'A','B','O','R','T','U','P','D','A','T','E','V','A','L','U','E','S','V',
-  'I','R','T','U','A','L','W','A','Y','S','W','H','E','N','W','H','E','R',
-  'E','C','U','R','S','I','V','E','A','F','T','E','R','E','N','A','M','E',
-  'A','N','D','E','F','E','R','R','E','D','I','S','T','I','N','C','T','A',
-  'U','T','O','I','N','C','R','E','M','E','N','T','C','A','S','T','C','O',
-  'L','U','M','N','C','O','M','M','I','T','C','O','N','F','L','I','C','T',
-  'C','R','O','S','S','C','U','R','R','E','N','T','_','T','I','M','E','S',
-  'T','A','M','P','A','R','T','I','T','I','O','N','D','R','O','P','R','E',
-  'C','E','D','I','N','G','F','A','I','L','A','S','T','F','I','L','T','E',
-  'R','E','P','L','A','C','E','F','I','R','S','T','F','O','L','L','O','W',
-  'I','N','G','F','R','O','M','F','U','L','L','I','M','I','T','I','F','O',
-  'R','D','E','R','E','S','T','R','I','C','T','O','T','H','E','R','S','O',
-  'V','E','R','I','G','H','T','R','O','L','L','B','A','C','K','R','O','W',
-  'S','U','N','B','O','U','N','D','E','D','U','N','I','O','N','U','S','I',
-  'N','G','V','A','C','U','U','M','V','I','E','W','I','N','D','O','W','B',
-  'Y','I','N','I','T','I','A','L','L','Y','P','R','I','M','A','R','Y',
+  'A','T','E','R','I','A','L','I','Z','E','D','E','F','E','R','R','E','D',
+  'I','S','T','I','N','C','T','U','P','D','A','T','E','V','A','L','U','E',
+  'S','V','I','R','T','U','A','L','W','A','Y','S','W','H','E','N','W','H',
+  'E','R','E','C','U','R','S','I','V','E','A','B','O','R','T','A','F','T',
+  'E','R','E','N','A','M','E','A','N','D','R','O','P','A','R','T','I','T',
+  'I','O','N','A','U','T','O','I','N','C','R','E','M','E','N','T','C','A',
+  'S','T','C','O','L','U','M','N','C','O','M','M','I','T','C','O','N','F',
+  'L','I','C','T','C','R','O','S','S','C','U','R','R','E','N','T','_','T',
+  'I','M','E','S','T','A','M','P','R','E','C','E','D','I','N','G','F','A',
+  'I','L','A','S','T','F','I','L','T','E','R','E','P','L','A','C','E','F',
+  'I','R','S','T','F','O','L','L','O','W','I','N','G','F','R','O','M','F',
+  'U','L','L','I','M','I','T','I','F','O','R','D','E','R','E','S','T','R',
+  'I','C','T','O','T','H','E','R','S','O','V','E','R','E','T','U','R','N',
+  'I','N','G','R','I','G','H','T','R','O','L','L','B','A','C','K','R','O',
+  'W','S','U','N','B','O','U','N','D','E','D','U','N','I','O','N','U','S',
+  'I','N','G','V','A','C','U','U','M','V','I','E','W','I','N','D','O','W',
+  'B','Y','I','N','I','T','I','A','L','L','Y','P','R','I','M','A','R','Y',
 };
 /* aKWHash[i] is the hash value for the i-th keyword */
 static const unsigned char aKWHash[127] = {
-    84, 102, 132,  82, 114,  29,   0,   0,  91,   0,  85,  72,   0,
-    53,  35,  86,  15,   0,  42,  94,  54, 126, 133,  19,   0,   0,
-   138,   0,  40, 128,   0,  22, 104,   0,   9,   0,   0, 122,  80,
-     0,  78,   6,   0,  65,  99, 145,   0, 134, 112,   0,   0,  48,
-     0, 100,  24,   0,  17,   0,  27,  70,  23,  26,   5,  60, 140,
-   107, 121,   0,  73, 101,  71, 143,  61, 119,  74,   0,  49,   0,
-    11,  41,   0, 110,   0,   0,   0, 106,  10, 108, 113, 124,  14,
-    50, 123,   0,  89,   0,  18, 120, 142,  56, 129, 137,  88,  83,
-    37,  30, 125,   0,   0, 105,  51, 130, 127,   0,  34,   0,   0,
-    44,   0,  95,  38,  39,   0,  20,  45, 116,  90,
+    84,  92, 134,  82, 105,  29,   0,   0,  94,   0,  85,  72,   0,
+    53,  35,  86,  15,   0,  42,  97,  54,  89, 135,  19,   0,   0,
+   140,   0,  40, 129,   0,  22, 107,   0,   9,   0,   0, 123,  80,
+     0,  78,   6,   0,  65, 103, 147,   0, 136, 115,   0,   0,  48,
+     0,  90,  24,   0,  17,   0,  27,  70,  23,  26,   5,  60, 142,
+   110, 122,   0,  73,  91,  71, 145,  61, 120,  74,   0,  49,   0,
+    11,  41,   0, 113,   0,   0,   0, 109,  10, 111, 116, 125,  14,
+    50, 124,   0, 100,   0,  18, 121, 144,  56, 130, 139,  88,  83,
+    37,  30, 126,   0,   0, 108,  51, 131, 128,   0,  34,   0,   0,
+   132,   0,  98,  38,  39,   0,  20,  45, 117,  93,
 };
 /* aKWNext[] forms the hash collision chain.  If aKWHash[i]==0
 ** then the i-th keyword has no more hash collisions.  Otherwise,
 ** the next keyword with the same hash is aKWHash[i]-1. */
-static const unsigned char aKWNext[145] = {
-     0,   0,   0,   0,   4,   0,  43,   0,   0, 103, 111,   0,   0,
-     0,   2,   0,   0, 141,   0,   0,   0,  13,   0,   0,   0,   0,
-   139,   0,   0, 118,  52,   0,   0, 135,  12,   0,   0,  62,   0,
-   136,   0, 131,   0,   0,  36,   0,   0,  28,  77,   0,   0,   0,
+static const unsigned char aKWNext[147] = {
+     0,   0,   0,   0,   4,   0,  43,   0,   0, 106, 114,   0,   0,
+     0,   2,   0,   0, 143,   0,   0,   0,  13,   0,   0,   0,   0,
+   141,   0,   0, 119,  52,   0,   0, 137,  12,   0,   0,  62,   0,
+   138,   0, 133,   0,   0,  36,   0,   0,  28,  77,   0,   0,   0,
      0,  59,   0,  47,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-     0,  69,   0,   0,   0,   0,   0, 144,   3,   0,  58,   0,   1,
-    75,   0,   0,   0,  31,   0,   0,   0,   0,   0,   0,  64,  66,
-    63,   0,   0,   0,   0,  46,   0,  16,   0, 115,   0,   0,   0,
-     0,   0,   0,   0,   0,   0,   0,  81,  97,   0,   8,   0, 109,
-    21,   7,  67,   0,  79,  93, 117,   0,   0,  68,   0,   0,  96,
-     0,  55,   0,  76,   0,  92,  32,  33,  57,  25,   0,  98,   0,
-     0,  87,
+     0,  69,   0,   0,   0,   0,   0, 146,   3,   0,  58,   0,   1,
+    75,   0,   0,   0,  31,   0,   0,   0,   0,   0, 127,   0, 104,
+     0,  64,  66,  63,   0,   0,   0,   0,   0,  46,   0,  16,   8,
+     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,  81, 101,   0,
+   112,  21,   7,  67,   0,  79,  96, 118,   0,   0,  68,   0,   0,
+    99,  44,   0,  55,   0,  76,   0,  95,  32,  33,  57,  25,   0,
+   102,   0,   0,  87,
 };
 /* aKWLen[i] is the length (in bytes) of the i-th keyword */
-static const unsigned char aKWLen[145] = {
+static const unsigned char aKWLen[147] = {
      7,   7,   5,   4,   6,   4,   5,   3,   6,   7,   3,   6,   6,
      7,   7,   3,   8,   2,   6,   5,   4,   4,   3,  10,   4,   7,
      6,   9,   4,   2,   6,   5,   9,   9,   4,   7,   3,   2,   4,
      4,   6,  11,   6,   2,   7,   5,   5,   9,   6,  10,   4,   6,
      2,   3,   7,   5,   9,   6,   6,   4,   5,   5,  10,   6,   5,
      7,   4,   5,   7,   6,   7,   7,   6,   5,   7,   3,   7,   4,
-     7,   6,  12,   9,   4,   6,   5,   4,   7,   6,   5,   6,   6,
-     7,   6,   4,   5,   9,   5,   6,   3,   8,   8,   2,  13,   2,
-     2,   4,   6,   6,   8,   5,  17,  12,   7,   9,   4,   9,   4,
-     4,   6,   7,   5,   9,   4,   4,   5,   2,   5,   8,   6,   4,
-     5,   8,   4,   3,   9,   5,   5,   6,   4,   6,   2,   2,   9,
-     3,   7,
+     7,   6,  12,   9,   4,   6,   5,   4,   7,   6,  12,   8,   8,
+     2,   6,   6,   7,   6,   4,   5,   9,   5,   5,   6,   3,   4,
+     9,  13,   2,   2,   4,   6,   6,   8,   5,  17,  12,   7,   9,
+     4,   4,   6,   7,   5,   9,   4,   4,   5,   2,   5,   8,   6,
+     4,   9,   5,   8,   4,   3,   9,   5,   5,   6,   4,   6,   2,
+     2,   9,   3,   7,
 };
 /* aKWOffset[i] is the index into zKWText[] of the start of
 ** the text for the i-th keyword. */
-static const unsigned short int aKWOffset[145] = {
+static const unsigned short int aKWOffset[147] = {
      0,   2,   2,   8,   9,  14,  16,  20,  23,  25,  25,  29,  33,
     36,  41,  46,  48,  53,  54,  59,  62,  65,  67,  69,  78,  81,
     86,  90,  90,  94,  99, 101, 105, 111, 119, 123, 123, 123, 126,
    129, 132, 137, 142, 146, 147, 152, 156, 160, 168, 174, 181, 184,
    184, 187, 189, 195, 198, 206, 211, 216, 219, 222, 226, 236, 239,
    244, 244, 248, 252, 259, 265, 271, 277, 277, 283, 284, 288, 295,
-   299, 306, 312, 324, 333, 335, 341, 346, 348, 355, 360, 365, 371,
-   377, 382, 388, 392, 395, 404, 408, 414, 416, 423, 424, 431, 433,
-   435, 444, 448, 454, 460, 468, 473, 473, 473, 489, 498, 501, 510,
-   513, 517, 522, 529, 534, 543, 547, 550, 555, 557, 561, 569, 575,
-   578, 583, 591, 591, 595, 604, 609, 614, 620, 623, 626, 629, 631,
-   636, 640,
+   299, 306, 312, 324, 333, 335, 341, 346, 348, 355, 359, 370, 377,
+   378, 385, 391, 397, 402, 408, 412, 415, 424, 429, 433, 439, 441,
+   444, 453, 455, 457, 466, 470, 476, 482, 490, 495, 495, 495, 511,
+   520, 523, 527, 532, 539, 544, 553, 557, 560, 565, 567, 571, 579,
+   585, 588, 597, 602, 610, 610, 614, 623, 628, 633, 639, 642, 645,
+   648, 650, 655, 659,
 };
 /* aKWCode[i] is the parser symbol code for the i-th keyword */
-static const unsigned char aKWCode[145] = {
+static const unsigned char aKWCode[147] = {
   TK_REINDEX,    TK_INDEXED,    TK_INDEX,      TK_DESC,       TK_ESCAPE,     
   TK_EACH,       TK_CHECK,      TK_KEY,        TK_BEFORE,     TK_FOREIGN,    
   TK_FOR,        TK_IGNORE,     TK_LIKE_KW,    TK_EXPLAIN,    TK_INSTEAD,    
@@ -142,18 +144,19 @@ static const unsigned char aKWCode[145] = {
   TK_BETWEEN,    TK_NOTHING,    TK_GROUPS,     TK_GROUP,      TK_CASCADE,    
   TK_ASC,        TK_DEFAULT,    TK_CASE,       TK_COLLATE,    TK_CREATE,     
   TK_CTIME_KW,   TK_IMMEDIATE,  TK_JOIN,       TK_INSERT,     TK_MATCH,      
-  TK_PLAN,       TK_ANALYZE,    TK_PRAGMA,     TK_ABORT,      TK_UPDATE,     
-  TK_VALUES,     TK_VIRTUAL,    TK_ALWAYS,     TK_WHEN,       TK_WHERE,      
-  TK_RECURSIVE,  TK_AFTER,      TK_RENAME,     TK_AND,        TK_DEFERRED,   
-  TK_DISTINCT,   TK_IS,         TK_AUTOINCR,   TK_TO,         TK_IN,         
-  TK_CAST,       TK_COLUMNKW,   TK_COMMIT,     TK_CONFLICT,   TK_JOIN_KW,    
-  TK_CTIME_KW,   TK_CTIME_KW,   TK_CURRENT,    TK_PARTITION,  TK_DROP,       
-  TK_PRECEDING,  TK_FAIL,       TK_LAST,       TK_FILTER,     TK_REPLACE,    
-  TK_FIRST,      TK_FOLLOWING,  TK_FROM,       TK_JOIN_KW,    TK_LIMIT,      
-  TK_IF,         TK_ORDER,      TK_RESTRICT,   TK_OTHERS,     TK_OVER,       
-  TK_JOIN_KW,    TK_ROLLBACK,   TK_ROWS,       TK_ROW,        TK_UNBOUNDED,  
-  TK_UNION,      TK_USING,      TK_VACUUM,     TK_VIEW,       TK_WINDOW,     
-  TK_DO,         TK_BY,         TK_INITIALLY,  TK_ALL,        TK_PRIMARY,    
+  TK_PLAN,       TK_ANALYZE,    TK_PRAGMA,     TK_MATERIALIZED, TK_DEFERRED,   
+  TK_DISTINCT,   TK_IS,         TK_UPDATE,     TK_VALUES,     TK_VIRTUAL,    
+  TK_ALWAYS,     TK_WHEN,       TK_WHERE,      TK_RECURSIVE,  TK_ABORT,      
+  TK_AFTER,      TK_RENAME,     TK_AND,        TK_DROP,       TK_PARTITION,  
+  TK_AUTOINCR,   TK_TO,         TK_IN,         TK_CAST,       TK_COLUMNKW,   
+  TK_COMMIT,     TK_CONFLICT,   TK_JOIN_KW,    TK_CTIME_KW,   TK_CTIME_KW,   
+  TK_CURRENT,    TK_PRECEDING,  TK_FAIL,       TK_LAST,       TK_FILTER,     
+  TK_REPLACE,    TK_FIRST,      TK_FOLLOWING,  TK_FROM,       TK_JOIN_KW,    
+  TK_LIMIT,      TK_IF,         TK_ORDER,      TK_RESTRICT,   TK_OTHERS,     
+  TK_OVER,       TK_RETURNING,  TK_JOIN_KW,    TK_ROLLBACK,   TK_ROWS,       
+  TK_ROW,        TK_UNBOUNDED,  TK_UNION,      TK_USING,      TK_VACUUM,     
+  TK_VIEW,       TK_WINDOW,     TK_DO,         TK_BY,         TK_INITIALLY,  
+  TK_ALL,        TK_PRIMARY,    
 };
 /* Hash table decoded:
 **   0: INSERT
@@ -177,7 +180,7 @@ static const unsigned char aKWCode[145] = {
 **  18: TRANSACTION RIGHT
 **  19: WHEN
 **  20: SET HAVING
-**  21: IF
+**  21: MATERIALIZED IF
 **  22: ROWS
 **  23: SELECT
 **  24:
@@ -273,7 +276,7 @@ static const unsigned char aKWCode[145] = {
 ** 114: INTERSECT UNBOUNDED
 ** 115:
 ** 116:
-** 117: ON
+** 117: RETURNING ON
 ** 118:
 ** 119: WHERE
 ** 120: NO INNER
@@ -291,15 +294,20 @@ static int keywordCode(const char *z, int n, int *pType){
   int i, j;
   const char *zKW;
   if( n>=2 ){
-    i = ((charMap(z[0])*4) ^ (charMap(z[n-1])*3) ^ n) % 127;
+    i = ((charMap(z[0])*4) ^ (charMap(z[n-1])*3) ^ n*1) % 127;
     for(i=((int)aKWHash[i])-1; i>=0; i=((int)aKWNext[i])-1){
       if( aKWLen[i]!=n ) continue;
-      j = 0;
       zKW = &zKWText[aKWOffset[i]];
 #ifdef SQLITE_ASCII
+      if( (z[0]&~0x20)!=zKW[0] ) continue;
+      if( (z[1]&~0x20)!=zKW[1] ) continue;
+      j = 2;
       while( j<n && (z[j]&~0x20)==zKW[j] ){ j++; }
 #endif
 #ifdef SQLITE_EBCDIC
+      if( toupper(z[0])!=zKW[0] ) continue;
+      if( toupper(z[1])!=zKW[1] ) continue;
+      j = 2;
       while( j<n && toupper(z[j])==zKW[j] ){ j++; }
 #endif
       if( j<n ) continue;
@@ -391,63 +399,65 @@ static int keywordCode(const char *z, int n, int *pType){
       testcase( i==85 ); /* PLAN */
       testcase( i==86 ); /* ANALYZE */
       testcase( i==87 ); /* PRAGMA */
-      testcase( i==88 ); /* ABORT */
-      testcase( i==89 ); /* UPDATE */
-      testcase( i==90 ); /* VALUES */
-      testcase( i==91 ); /* VIRTUAL */
-      testcase( i==92 ); /* ALWAYS */
-      testcase( i==93 ); /* WHEN */
-      testcase( i==94 ); /* WHERE */
-      testcase( i==95 ); /* RECURSIVE */
-      testcase( i==96 ); /* AFTER */
-      testcase( i==97 ); /* RENAME */
-      testcase( i==98 ); /* AND */
-      testcase( i==99 ); /* DEFERRED */
-      testcase( i==100 ); /* DISTINCT */
-      testcase( i==101 ); /* IS */
-      testcase( i==102 ); /* AUTOINCREMENT */
-      testcase( i==103 ); /* TO */
-      testcase( i==104 ); /* IN */
-      testcase( i==105 ); /* CAST */
-      testcase( i==106 ); /* COLUMN */
-      testcase( i==107 ); /* COMMIT */
-      testcase( i==108 ); /* CONFLICT */
-      testcase( i==109 ); /* CROSS */
-      testcase( i==110 ); /* CURRENT_TIMESTAMP */
-      testcase( i==111 ); /* CURRENT_TIME */
-      testcase( i==112 ); /* CURRENT */
-      testcase( i==113 ); /* PARTITION */
-      testcase( i==114 ); /* DROP */
-      testcase( i==115 ); /* PRECEDING */
-      testcase( i==116 ); /* FAIL */
-      testcase( i==117 ); /* LAST */
-      testcase( i==118 ); /* FILTER */
-      testcase( i==119 ); /* REPLACE */
-      testcase( i==120 ); /* FIRST */
-      testcase( i==121 ); /* FOLLOWING */
-      testcase( i==122 ); /* FROM */
-      testcase( i==123 ); /* FULL */
-      testcase( i==124 ); /* LIMIT */
-      testcase( i==125 ); /* IF */
-      testcase( i==126 ); /* ORDER */
-      testcase( i==127 ); /* RESTRICT */
-      testcase( i==128 ); /* OTHERS */
-      testcase( i==129 ); /* OVER */
-      testcase( i==130 ); /* RIGHT */
-      testcase( i==131 ); /* ROLLBACK */
-      testcase( i==132 ); /* ROWS */
-      testcase( i==133 ); /* ROW */
-      testcase( i==134 ); /* UNBOUNDED */
-      testcase( i==135 ); /* UNION */
-      testcase( i==136 ); /* USING */
-      testcase( i==137 ); /* VACUUM */
-      testcase( i==138 ); /* VIEW */
-      testcase( i==139 ); /* WINDOW */
-      testcase( i==140 ); /* DO */
-      testcase( i==141 ); /* BY */
-      testcase( i==142 ); /* INITIALLY */
-      testcase( i==143 ); /* ALL */
-      testcase( i==144 ); /* PRIMARY */
+      testcase( i==88 ); /* MATERIALIZED */
+      testcase( i==89 ); /* DEFERRED */
+      testcase( i==90 ); /* DISTINCT */
+      testcase( i==91 ); /* IS */
+      testcase( i==92 ); /* UPDATE */
+      testcase( i==93 ); /* VALUES */
+      testcase( i==94 ); /* VIRTUAL */
+      testcase( i==95 ); /* ALWAYS */
+      testcase( i==96 ); /* WHEN */
+      testcase( i==97 ); /* WHERE */
+      testcase( i==98 ); /* RECURSIVE */
+      testcase( i==99 ); /* ABORT */
+      testcase( i==100 ); /* AFTER */
+      testcase( i==101 ); /* RENAME */
+      testcase( i==102 ); /* AND */
+      testcase( i==103 ); /* DROP */
+      testcase( i==104 ); /* PARTITION */
+      testcase( i==105 ); /* AUTOINCREMENT */
+      testcase( i==106 ); /* TO */
+      testcase( i==107 ); /* IN */
+      testcase( i==108 ); /* CAST */
+      testcase( i==109 ); /* COLUMN */
+      testcase( i==110 ); /* COMMIT */
+      testcase( i==111 ); /* CONFLICT */
+      testcase( i==112 ); /* CROSS */
+      testcase( i==113 ); /* CURRENT_TIMESTAMP */
+      testcase( i==114 ); /* CURRENT_TIME */
+      testcase( i==115 ); /* CURRENT */
+      testcase( i==116 ); /* PRECEDING */
+      testcase( i==117 ); /* FAIL */
+      testcase( i==118 ); /* LAST */
+      testcase( i==119 ); /* FILTER */
+      testcase( i==120 ); /* REPLACE */
+      testcase( i==121 ); /* FIRST */
+      testcase( i==122 ); /* FOLLOWING */
+      testcase( i==123 ); /* FROM */
+      testcase( i==124 ); /* FULL */
+      testcase( i==125 ); /* LIMIT */
+      testcase( i==126 ); /* IF */
+      testcase( i==127 ); /* ORDER */
+      testcase( i==128 ); /* RESTRICT */
+      testcase( i==129 ); /* OTHERS */
+      testcase( i==130 ); /* OVER */
+      testcase( i==131 ); /* RETURNING */
+      testcase( i==132 ); /* RIGHT */
+      testcase( i==133 ); /* ROLLBACK */
+      testcase( i==134 ); /* ROWS */
+      testcase( i==135 ); /* ROW */
+      testcase( i==136 ); /* UNBOUNDED */
+      testcase( i==137 ); /* UNION */
+      testcase( i==138 ); /* USING */
+      testcase( i==139 ); /* VACUUM */
+      testcase( i==140 ); /* VIEW */
+      testcase( i==141 ); /* WINDOW */
+      testcase( i==142 ); /* DO */
+      testcase( i==143 ); /* BY */
+      testcase( i==144 ); /* INITIALLY */
+      testcase( i==145 ); /* ALL */
+      testcase( i==146 ); /* PRIMARY */
       *pType = aKWCode[i];
       break;
     }
@@ -459,7 +469,7 @@ int sqlite3KeywordCode(const unsigned char *z, int n){
   keywordCode((char*)z, n, &id);
   return id;
 }
-#define SQLITE_N_KEYWORD 145
+#define SQLITE_N_KEYWORD 147
 int sqlite3_keyword_name(int i,const char **pzName,int *pnName){
   if( i<0 || i>=SQLITE_N_KEYWORD ) return SQLITE_ERROR;
   *pzName = zKWText + aKWOffset[i];

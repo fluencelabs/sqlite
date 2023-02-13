@@ -240,6 +240,9 @@ static int demoRead(
   if( nRead==iAmt ){
     return SQLITE_OK;
   }else if( nRead>=0 ){
+    if( nRead<iAmt ){
+      memset(&((char*)zBuf)[nRead], 0, iAmt-nRead);
+    }
     return SQLITE_IOERR_SHORT_READ;
   }
 
@@ -369,7 +372,7 @@ static int demoCheckReservedLock(sqlite3_file *pFile, int *pResOut){
 ** No xFileControl() verbs are implemented by this VFS.
 */
 static int demoFileControl(sqlite3_file *pFile, int op, void *pArg){
-  return SQLITE_OK;
+  return SQLITE_NOTFOUND;
 }
 
 /*
@@ -458,22 +461,23 @@ static int demoDelete(sqlite3_vfs *pVfs, const char *zPath, int dirSync){
 
   if( rc==0 && dirSync ){
     int dfd;                      /* File descriptor open on directory */
-    int i;                        /* Iterator variable */
+    char *zSlash;
     char zDir[MAXPATHNAME+1];     /* Name of directory containing file zPath */
 
     /* Figure out the directory name from the path of the file deleted. */
     sqlite3_snprintf(MAXPATHNAME, zDir, "%s", zPath);
     zDir[MAXPATHNAME] = '\0';
-    for(i=strlen(zDir); i>1 && zDir[i]!='/'; i++);
-    zDir[i] = '\0';
-
-    /* Open a file-descriptor on the directory. Sync. Close. */
-    dfd = open(zDir, O_RDONLY, 0);
-    if( dfd<0 ){
-      rc = -1;
-    }else{
-      rc = fsync(dfd);
-      close(dfd);
+    zSlash = strrchr(zDir,'/');
+    if( zSlash ){
+      /* Open a file-descriptor on the directory. Sync. Close. */
+      zSlash[0] = 0;
+      dfd = open(zDir, O_RDONLY, 0);
+      if( dfd<0 ){
+        rc = -1;
+      }else{
+        rc = fsync(dfd);
+        close(dfd);
+      }
     }
   }
   return (rc==0 ? SQLITE_OK : SQLITE_IOERR_DELETE);
@@ -503,8 +507,8 @@ static int demoAccess(
   int eAccess = F_OK;             /* Second argument to access() */
 
   assert( flags==SQLITE_ACCESS_EXISTS       /* access(zPath, F_OK) */
-          || flags==SQLITE_ACCESS_READ         /* access(zPath, R_OK) */
-          || flags==SQLITE_ACCESS_READWRITE    /* access(zPath, R_OK|W_OK) */
+       || flags==SQLITE_ACCESS_READ         /* access(zPath, R_OK) */
+       || flags==SQLITE_ACCESS_READWRITE    /* access(zPath, R_OK|W_OK) */
   );
 
   if( flags==SQLITE_ACCESS_READWRITE ) eAccess = R_OK|W_OK;
@@ -676,4 +680,3 @@ int Sqlitetest_demovfs_Init(Tcl_Interp *interp){ return TCL_OK; }
 #endif
 
 #endif /* SQLITE_TEST */
-

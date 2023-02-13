@@ -143,7 +143,7 @@ static int icuLikeCompare(
     **     3. uPattern is an unescaped escape character, or
     **     4. uPattern is to be handled as an ordinary character
     */
-    if( !prevEscape && uPattern==MATCH_ALL ){
+    if( uPattern==MATCH_ALL && !prevEscape && uPattern!=(uint32_t)uEsc ){
       /* Case 1. */
       uint8_t c;
 
@@ -169,12 +169,12 @@ static int icuLikeCompare(
       }
       return 0;
 
-    }else if( !prevEscape && uPattern==MATCH_ONE ){
+    }else if( uPattern==MATCH_ONE && !prevEscape && uPattern!=(uint32_t)uEsc ){
       /* Case 2. */
       if( *zString==0 ) return 0;
       SQLITE_ICU_SKIP_UTF8(zString);
 
-    }else if( !prevEscape && uPattern==(uint32_t)uEsc){
+    }else if( uPattern==(uint32_t)uEsc && !prevEscape ){
       /* Case 3. */
       prevEscape = 1;
 
@@ -299,8 +299,9 @@ static void icuRegexpFunc(sqlite3_context *p, int nArg, sqlite3_value **apArg){
 
     if( U_SUCCESS(status) ){
       sqlite3_set_auxdata(p, 0, pExpr, icuRegexpDelete);
-    }else{
-      assert(!pExpr);
+      pExpr = sqlite3_get_auxdata(p, 0);
+    }
+    if( !pExpr ){
       icuFunctionError(p, "uregex_open", status);
       return;
     }

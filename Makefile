@@ -1,6 +1,6 @@
 TARGET = sqlite3
-CC = /bin/clang
-SYSROOT = /share/wasi-sysroot
+CC = /wasi-sdk-15.0/bin/clang
+SYSROOT = /wasi-sdk-15.0/share/wasi-sysroot
 TARGET_TRIPLE = wasm32-wasi
 CFLAGS = -fvisibility=hidden
 SDK = sdk/logger.h
@@ -77,7 +77,7 @@ SQLITE_SRC = \
 	src/global.c\
 	src/hash.c\
 	src/insert.c\
-	src/json1.c\
+  	src/json.c\
 	src/legacy.c\
 	src/loadext.c\
 	src/main.c\
@@ -122,6 +122,7 @@ SQLITE_SRC = \
 	src/vdbemem.c\
 	src/vdbesort.c\
 	src/vdbetrace.c\
+  	src/vdbevtab.c\
 	src/vtab.c\
 	src/wal.c\
 	src/walker.c\
@@ -133,7 +134,6 @@ WRAPPER_SRC = src/wrapper.c
 SQLITE_FLAGS = \
 	-DSQLITE_CORE\
 	-D_HAVE_SQLITE_CONFIG_H\
-	-DSQLITE_ENABLE_JSON1\
 	-DENABLE_LOG\
 	-DBUILD_sqlite\
 	-DNDEBUG\
@@ -142,7 +142,6 @@ SQLITE_FLAGS = \
 	-DHAVE_READLINE=0\
 	-DHAVE_EDITLINE=0\
 	-DSQLITE_OMIT_LOAD_EXTENSION\
-	-DSQLITE_ENABLE_JSON1\
 	-DSQLITE_ENABLE_FTS5\
 	-DSQLITE_ENABLE_RTREE\
 	-DSQLITE_ENABLE_EXPLAIN_COMMENTS\
@@ -163,7 +162,8 @@ all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
-	# /root/.cargo/bin/fce embed_it -i sqlite3.wasm -w sqlite3.wit
+	/root/.cargo/bin/marine set version -i ./sqlite3.wasm -v 0.7.0
+	/root/.cargo/bin/marine set it -i ./sqlite3.wasm -w sqlite3.wit
 
 .PRECIOUS: $(TARGET)
 

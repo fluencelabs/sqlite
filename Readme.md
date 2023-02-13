@@ -2,11 +2,11 @@
 
 Sqlite fork ported to WebAssembly and adapted for the Fluence network. Could be launched and played on the Fluence [dashboard](http://dash.fluence.network/deploy/sqlite).
 
-Based on SQlite version 3.31.1.
+Based on SQlite version 3.40.1.
 
 # How to build
 
-This app could be built either with docker 
+This app could be built either with docker
 
 ```bash
 docker-compose up
@@ -69,7 +69,7 @@ Given char string `sql` as the request, the general scheme to use it is followin
  2. `void *res = invoke(ptr, strlen(sql))` to execute the request
  3. read a result from the `res` by reading 4 bytes as little-endian `result_size` and the read `result_size` bytes as the final result.
  4. `deallocate(res, strlen(sql))` to clean memory.
- 
+
 Depends on your Wasm execution environment, `load`/`store` could be used for reading and writing a module memory.
 
 ## More insights
