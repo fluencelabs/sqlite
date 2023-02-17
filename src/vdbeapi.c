@@ -1538,9 +1538,10 @@ int sqlite3_bind_blob(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
 #ifdef __sqlite_unmodified_upstream
   return bindText(pStmt, i, zData, nData, xDel, 0);
 #else
-  // xDel is a custom deallocator, due to our IT architecture it can't be
-  // provided from other modules.
-  return bindText(pStmt, i, zData, nData, free, 0);
+  // xDel is a custom deallocator and if it is not SQLITE_STATIC
+  // due to our IT architecture it can't be provided from other modules.
+  return bindText(pStmt, i, zData, nData,
+    (xDel==SQLITE_STATIC || xDel==SQLITE_TRANSIENT)?xDel:free, 0);
 #endif
 }
 int sqlite3_bind_blob64(sqlite3_stmt *pStmt, int i, const void *zData,
@@ -1598,9 +1599,10 @@ int sqlite3_bind_text(sqlite3_stmt *pStmt, int i, const char *zData, int nData,
 #ifdef __sqlite_unmodified_upstream
   return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
 #else
-  // xDel is a custom deallocator, due to our IT architecture it can't be
-  // provided from other modules.
-  return bindText(pStmt, i, zData, nData, free, SQLITE_UTF8);
+  // xDel is a custom deallocator and if it is not SQLITE_STATIC
+  // due to our IT architecture it can't be provided from other modules.
+  return bindText(pStmt, i, zData, nData,
+    (xDel==SQLITE_STATIC || xDel==SQLITE_TRANSIENT)?xDel:free, SQLITE_UTF8);
 #endif
 }
 int sqlite3_bind_text64(sqlite3_stmt *pStmt, int i, const char *zData,
