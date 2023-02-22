@@ -1,87 +1,106 @@
 # SQLite
 
-Sqlite fork ported to WebAssembly and adapted for the Fluence network. Could be launched and played on the Fluence [dashboard](http://dash.fluence.network/deploy/sqlite).
 
-Based on SQlite version 3.40.1.
+## Overview
+SQLite fork adapted to work with Fluence the protocol. The current version is based on SQLite version 3.40.1. The artifact is SQLite WASM module:
 
-# How to build
 
-This app could be built either with docker
+- that is compiled following [Marine runtime ABI conventions](https://fluence.dev/docs/marine-book/marine-rust-sdk/module-abi)
+- to be used with [Marine runtime](https://github.com/fluencelabs/marine)
+
+
+## How to build
+
+
+
+Wasm module can be built with either docker-compose
+
+
 
 ```bash
+
 docker-compose up
+
 ```
 
-or by Makefile with [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) installed
+
+
+or using this [Makefile](./Makefile) with GNU make. There are prerequisites to be installed following this path, namely [wasi-sdk](https://github.com/WebAssembly/wasi-sdk) and marine crate. Take a look at the Dockerfile for the details.
+
+
 ```bash
+
 make
+
 ```
 
-# How to use
 
-At now, this fork exports five API functions:
-```cpp
 
-/**
- * Executes given SQL request and returns result in as a pointer to the following structure: | result size (4 bytes, le)| result (size bytes) |.
- *
- * @param sql a pointer to the supplied sql request
- * @param length a size of the supplied sql request
- * @return a pointer to the struct contains result_size and result
- */
-char *invoke(const char *sql, size_t length);
+## How to use
 
-/**
- * Allocates a memory region of a given size. Could be used by Wasm execution environments for byte array passing.
- *
- * @param size a size of allocated memory region
- * @return a pointer to the allocated memory region
- */
-void *allocate(size_t size);
 
-/**
- * Frees a memory region. Could be used by Wasm execution environments for freeing previous memory allocated by `allocate` function.
- *
- * @param ptr a pointer to the previously allocated memory region
- * @param size a size of the previously allocated memory region
- */
-void deallocate(void *ptr, size_t size);
 
-/**
- * Stores one byte by a given address in the module memory.
- *
- * @param ptr a address where byte should be stored
- * @param value a byte to be stored
- */
-void store(void *ptr, char value);
+The SQLite Wasm module exports a set of SQLite C API functions. The easiest way to try this module is to run it with Marine REPL.
+You can find MREPL output for a simple "CREATE-INSERT-SELECT" scenario below. Mind the second argument to sqlite3_open_v2() that is an OR-ed SQLite flag values. The value "6" in this context means `SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE`.
 
-/**
- * Returns one byte by a given address in the module memory.
- *
- * @param ptr a address at which the needed byte is located
- * @return the byte at the given address
- */
-char load(void *ptr);
+
+```bash
+$cargo install mrepl
+...
+$mrepl -q Config.toml
+
+1> call sqlite3 sqlite3_open_v2 [":memory:",6,""]
+result: {
+  "db_handle": 198600,
+  "ret_code": 0
+}
+ elapsed time: 357.556µs
+
+2> call sqlite3 sqlite3_exec [198600, "CREATE TABLE tab1(i bigint);", 0, 0]
+result: {
+  "err_msg": "",
+  "ret_code": 0
+}
+ elapsed time: 1.736661ms
+
+3> call sqlite3 sqlite3_exec [198600, "INSERT INTO tab1 VALUES (42);", 0, 0]
+result: {
+  "err_msg": "",
+  "ret_code": 0
+}
+ elapsed time: 330.098µs
+
+4> call sqlite3 sqlite3_prepare_v2 [198600, "SELECT * FROM tab1;"]
+result: {
+  "ret_code": 0,
+  "stmt_handle": 244584,
+  "tail": 268147
+}
+ elapsed time: 280.668µs
+
+5> call sqlite3 sqlite3_step [244584]
+result: 100
+ elapsed time: 124.122µs
+
+6> call sqlite3 sqlite3_column_int64 [244584,0]
+result: 42
+ elapsed time: 72.483µs
+
 ```
 
-Given char string `sql` as the request, the general scheme to use it is following:
- 1. `void *ptr = allocate(strlen(sql))` that returns a pointer to the memory region enough for the string
- 2. `void *res = invoke(ptr, strlen(sql))` to execute the request
- 3. read a result from the `res` by reading 4 bytes as little-endian `result_size` and the read `result_size` bytes as the final result.
- 4. `deallocate(res, strlen(sql))` to clean memory.
 
-Depends on your Wasm execution environment, `load`/`store` could be used for reading and writing a module memory.
+You can also try the SQLite Wasm module using Rust together with [this Sqlite connector](https://github.com/fluencelabs/sqlite-wasm-connector). [Here](https://github.com/fluencelabs/examples/tree/main/marine-examples/sqlite) you can find a simple SQL REPL utility example built into a Wasm module.
 
-## More insights
+## Support
 
-At Fluence, we use WebAssembly (Wasm) to run applications in a trustless network of independent nodes. This trustless environment mandates that every piece of the code executed by any network node must be verified by another node to check whether the execution was performed correctly. In order to be verifiable, every computation must be made deterministic, which means that to run WebAssembly code in a trustless network, we need to make its execution deterministic.
+Please, [file an issue](https://github.com/fluencelabs/sqlite/issues) if you find a bug. You can also contact us at [Discord](https://discord.com/invite/5qSnPZKh7u) or [Telegram](https://t.me/fluence_project).  We will do our best to resolve the issue ASAP.
 
-There are three primary sources of nondeterminism in WebAssembly: external functions invocation, NaN payloads, and VM resource exhaustion. The first one is the most problematic; currently, we deal with it by simply prohibiting any interactions with the host environment from Wasm programs. This means that submitted WebAssembly code should not contain any external imports.
 
-The main purpose of this fork is to compile to Wasm without any imports. SQlite is famous for it embeddability and allows to configure itself by variety of macros. E.g. multithreading that produces a lot of imports of host functions could be completely disabled by setting SQLITE_THREADSAFE to 0. Also this fork has been patched to use only memory database without any interaction with a hard disk. So, now it is Wasm in-memory database.
+## Contributing
 
-More information about ways of porting C/C++ code to Wasm could be found in our [article](https://medium.com/fluence-network/porting-redis-to-webassembly-with-clang-wasi-af99b264ca8) about porting of Redis.
+Any interested person is welcome to contribute to the project. Please, make sure you read and follow some basic [rules](https://github.com/fluencelabs/rust-peer/blob/master/CONTRIBUTING.md).
 
-## Future plans
 
-We are working on supporting of subset of WASI syscalls and interface types support for more convinient parameter passing scheme.
+## License
+
+All software code is copyright (c) Fluence Labs, Inc. under the [Apache-2.0](https://github.com/fluencelabs/rust-peer/blob/master/LICENSE) license.
