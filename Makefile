@@ -36,6 +36,8 @@ EXPORT_FUNCS = \
 	--export=sqlite3_column_int64,$\
 	--export=sqlite3_column_blob_,$\
 	--export=sqlite3_column_bytes,$\
+	--export=sqlite3_soft_heap_limit64,$\
+	--export=sqlite3_hard_heap_limit64,$\
 	--export=sqlite3_finalize
 SQLITE_SRC = \
 	src/alter.c\
