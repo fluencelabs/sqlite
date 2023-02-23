@@ -68,7 +68,7 @@ void write_le_int(unsigned char *array, unsigned int offset, unsigned int value)
 extern void __wasm_call_ctors();
 
 int main() {
-  __wasm_call_ctors(); // the main purpose of this empty main is to initialize WASI subsystem
+  __wasm_call_ctors(); // for more details see https://github.com/WebAssembly/WASI/issues/471
 
   return 0;
 }
