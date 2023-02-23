@@ -65,7 +65,10 @@ void write_le_int(unsigned char *array, unsigned int offset, unsigned int value)
   array[offset + 3] = (value >> 24) & 0xff;
 }
 
+extern void __wasm_call_ctors();
+
 int main() {
-  // the main purpose of this empty main is to initialize WASI subsystem
+  __wasm_call_ctors(); // the main purpose of this empty main is to initialize WASI subsystem
+
   return 0;
 }
