@@ -1,6 +1,6 @@
 TARGET = sqlite3
-CC = /wasi-sdk-15.0/bin/clang
-SYSROOT = /wasi-sdk-15.0/share/wasi-sysroot
+CC = ./wasi-sdk/bin/clang
+SYSROOT = ./wasi-sdk/share/wasi-sysroot
 TARGET_TRIPLE = wasm32-wasi
 CFLAGS = -fvisibility=hidden
 SDK = sdk/logger.h
@@ -164,8 +164,8 @@ all: default
 
 $(TARGET): $(SQLITE_SRC) $(WRAPPER_SRC)
 	$(CC) -O3 --sysroot=$(SYSROOT) --target=$(TARGET_TRIPLE) $(SQLITE_FLAGS) $(CFLAGS) $(LDFLAGS) -Wl,$(EXPORT_FUNCS) $^ -o $@.wasm
-	/root/.cargo/bin/marine set version -i ./sqlite3.wasm -v 0.7.0
-	/root/.cargo/bin/marine set it -i ./sqlite3.wasm -w sqlite3.wit
+	marine set version -i ./sqlite3.wasm -v $(shell cat version.txt)
+	marine set it -i ./sqlite3.wasm -w sqlite3.wit
 
 .PRECIOUS: $(TARGET)
 
