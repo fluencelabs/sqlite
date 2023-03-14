@@ -1,8 +1,0 @@
-version: '3'
-services:
-  sqlite3:
-    build:
-      context: .
-    container_name: sqlite3_builder
-    volumes:
-     - .:/code

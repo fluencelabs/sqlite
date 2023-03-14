@@ -1,0 +1,12 @@
+{
+  "bootstrap-sha": "c1fa069dcbadb1bf4bb076408ad4ddbd77c7ede0",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "packages": {
+    ".": {
+      "package-name": "sqlite-wasm",
+      "component": "sqlite-wasm"
+    }
+  }
+}
