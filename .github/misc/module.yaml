@@ -1,0 +1,5 @@
+version: 0
+type: compiled
+name: sqlite3
+volumes:
+  sites: ./tmp

@@ -1,0 +1,37 @@
+name: Build sqlite artifact
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    name: "Build sqlite.wasm"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup wasi-sdk
+        run: |
+          curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-15/wasi-sdk-15.0-linux.tar.gz | tar xz -C ./
+          mv wasi-sdk-* wasi-sdk
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Marine
+        uses: baptiste0928/cargo-install@v1.3.1
+        with:
+          crate: marine
+
+      - name: Build sqlite-wasm
+        run: make
+
+      - name: Upload sqlite-wasm
+        uses: actions/upload-artifact@v3
+        with:
+          name: sqlite-wasm
+          path: sqlite3.wasm
+          if-no-files-found: error
