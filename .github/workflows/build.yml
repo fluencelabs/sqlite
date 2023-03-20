@@ -23,6 +23,8 @@ jobs:
 
       - name: Setup marine
         uses: fluencelabs/setup-marine@v1
+        with:
+          version: 0.12.5
 
       - name: Build sqlite-wasm
         run: make
