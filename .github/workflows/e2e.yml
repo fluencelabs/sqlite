@@ -16,6 +16,8 @@ jobs:
   build:
     name: "sqlite"
     uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ github.ref }}
 
   snapshot:
     needs: build

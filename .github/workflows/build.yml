@@ -2,6 +2,11 @@ name: Build sqlite artifact
 
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: "git ref"
+        type: string
+        default: master
 
 jobs:
   build:
@@ -12,6 +17,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          registry: fluencelabs/sqlite
+          ref: ${{ inputs.ref }}
 
       - name: Setup wasi-sdk
         run: |
