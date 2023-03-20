@@ -16,3 +16,64 @@ jobs:
   build:
     name: "sqlite"
     uses: ./.github/workflows/build.yml
+
+  snapshot:
+    needs: build
+    name: "sqlite-wasm"
+    uses: fluencelabs/sqlite-wasm-connector/.github/workflows/snapshot.yml@master
+
+  registry:
+    needs:
+      - snapshot
+    uses: fluencelabs/registry/.github/workflows/tests.yml@main
+    with:
+      cargo-dependencies: |
+        [
+          {
+            "package": "marine-sqlite-connector",
+            "version": "=${{ needs.snapshot.outputs.version }}",
+            "registry": "fluence"
+          }
+        ]
+  spell:
+    needs:
+      - snapshot
+    uses: fluencelabs/spell/.github/workflows/snapshot.yml@main
+    with:
+      cargo-dependencies: |
+        [
+          {
+            "package": "marine-sqlite-connector",
+            "version": "=${{ needs.snapshot.outputs.version }}",
+            "registry": "fluence"
+          }
+        ]
+
+  rust-peer:
+    needs:
+      - spell
+
+    uses: fluencelabs/rust-peer/.github/workflows/snapshot.yml@master
+    with:
+      image-name: "docker.fluence.dev/sqlite-wasm-connector"
+      cargo-dependencies: |
+        [
+          {
+            "package": "fluence-spell-dtos",
+            "version": "=${{ needs.spell.outputs.cargo-version }}",
+            "registry": "fluence"
+          },
+          {
+            "package": "fluence-spell-distro",
+            "version": "=${{ needs.spell.outputs.cargo-version }}",
+            "registry": "fluence"
+          }
+        ]
+
+  spell-aqua-tests:
+    name: "spell"
+    needs:
+      - rust-peer
+    uses: fluencelabs/spell/.github/workflows/tests.yml@main
+    with:
+      rust-peer-image: "${{ needs.rust-peer.outputs.rust-peer-image }}"
