@@ -18,6 +18,7 @@ jobs:
     uses: ./.github/workflows/build.yml
 
   snapshot:
+    needs: build
     name: "sqlite-wasm"
     uses: fluencelabs/sqlite-wasm-connector/.github/workflows/snapshot.yml@master
 
