@@ -18,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          registry: fluencelabs/sqlite
+          repository: fluencelabs/sqlite
           ref: ${{ inputs.ref }}
 
       - name: Setup wasi-sdk
