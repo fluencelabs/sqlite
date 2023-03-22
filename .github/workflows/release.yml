@@ -38,6 +38,8 @@ jobs:
     if: needs.release-please.outputs.release-created
     needs: release-please
     uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ github.ref }}
 
   publish:
     runs-on: ubuntu-latest
