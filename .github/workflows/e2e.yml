@@ -3,10 +3,25 @@ name: "e2e"
 on:
   pull_request:
     paths-ignore:
-      - "!**.md"
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/e2e.yml"
+      - "!.github/workflows/snapshot.yml"
+      - "!.github/workflows/build.yml"
+    types:
+      - "labeled"
+      - "synchronize"
+      - "opened"
+      - "reopened"
   push:
     branches:
       - "master"
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/e2e.yml"
+      - "!.github/workflows/snapshot.yml"
+      - "!.github/workflows/build.yml"
 
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
@@ -24,19 +39,6 @@ jobs:
     name: "sqlite-wasm"
     uses: fluencelabs/sqlite-wasm-connector/.github/workflows/snapshot.yml@master
 
-  registry:
-    needs:
-      - snapshot
-    uses: fluencelabs/registry/.github/workflows/tests.yml@main
-    with:
-      cargo-dependencies: |
-        [
-          {
-            "package": "marine-sqlite-connector",
-            "version": "=${{ needs.snapshot.outputs.version }}",
-            "registry": "fluence"
-          }
-        ]
   spell:
     needs:
       - snapshot
@@ -55,9 +57,8 @@ jobs:
     needs:
       - spell
 
-    uses: fluencelabs/rust-peer/.github/workflows/snapshot.yml@master
+    uses: fluencelabs/rust-peer/.github/workflows/build.yml@master
     with:
-      image-name: "docker.fluence.dev/sqlite-wasm-connector"
       cargo-dependencies: |
         [
           {
@@ -72,10 +73,37 @@ jobs:
           }
         ]
 
+  rust-peer-snapshot:
+    name: "rust-peer"
+    needs:
+      - rust-peer
+
+    uses: fluencelabs/rust-peer/.github/workflows/container.yml@master
+    with:
+      image-name: "docker.fluence.dev/sqlite-wasm-connector"
+      flavour: "minimal"
+      rust-peer-sha: "${{ needs.rust-peer.outputs.rust-peer-sha }}"
+
   spell-aqua-tests:
     name: "spell"
     needs:
-      - rust-peer
+      - rust-peer-snapshot
     uses: fluencelabs/spell/.github/workflows/tests.yml@main
     with:
-      rust-peer-image: "${{ needs.rust-peer.outputs.rust-peer-image }}"
+      rust-peer-image: "${{ needs.rust-peer-snapshot.outputs.rust-peer-image }}"
+
+  registry:
+    needs:
+      - snapshot
+      - rust-peer-snapshot
+    uses: fluencelabs/registry/.github/workflows/tests.yml@main
+    with:
+      rust-peer-image: "${{ needs.rust-peer-snapshot.outputs.rust-peer-image }}"
+      cargo-dependencies: |
+        [
+          {
+            "package": "marine-sqlite-connector",
+            "version": "=${{ needs.snapshot.outputs.version }}",
+            "registry": "fluence"
+          }
+        ]
