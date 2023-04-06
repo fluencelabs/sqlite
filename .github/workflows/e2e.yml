@@ -30,6 +30,9 @@ concurrency:
 jobs:
   build:
     name: "sqlite"
+    if: >
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.labels.*.name, 'e2e')
     uses: ./.github/workflows/build.yml
     with:
       ref: ${{ github.ref }}
