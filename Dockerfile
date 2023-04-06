@@ -10,7 +10,7 @@ RUN apt update \
     libtinfo6 \
     cargo
 
-RUN cargo install marine
+RUN cargo install marine --version 0.12.7
 
 VOLUME /code
 WORKDIR /code

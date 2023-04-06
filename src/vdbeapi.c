@@ -1528,21 +1528,30 @@ static int bindText(sqlite3_stmt *pStmt, /* The statement to bind against */
 /*
 ** Bind a blob value to an SQL statement variable.
 */
-int sqlite3_bind_blob(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
-                      void (*xDel)(void *)) {
+#ifndef __sqlite_unmodified_upstream
+int sqlite3_bind_blob_(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
+                      void (*xDel)(void *))
+    __attribute__((export_name("sqlite3_bind_blob"))) {
 #ifdef SQLITE_ENABLE_API_ARMOR
   if (nData < 0)
     return SQLITE_MISUSE_BKPT;
 #endif
 
-#ifdef __sqlite_unmodified_upstream
-  return bindText(pStmt, i, zData, nData, xDel, 0);
-#else
   // xDel is a custom deallocator and if it is not SQLITE_STATIC
   // due to our IT architecture it can't be provided from other modules.
-  return bindText(pStmt, i, zData, nData,
-    (xDel==SQLITE_STATIC || xDel==SQLITE_TRANSIENT)?xDel:free, 0);
+  // However the memory zData uses has to be cleaned up eventually.
+  add_object_to_release((void*)zData);
+  return bindText(pStmt, i, zData, nData, xDel, 0);
+}
 #endif
+
+int sqlite3_bind_blob(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
+                      void (*xDel)(void *)) {
+#ifdef SQLITE_ENABLE_API_ARMOR
+  if (nData < 0) return SQLITE_MISUSE_BKPT;
+#endif
+
+  return bindText(pStmt, i, zData, nData, xDel, 0);
 }
 int sqlite3_bind_blob64(sqlite3_stmt *pStmt, int i, const void *zData,
                         sqlite3_uint64 nData, void (*xDel)(void *)) {
@@ -1594,17 +1603,24 @@ int sqlite3_bind_pointer(sqlite3_stmt *pStmt, int i, void *pPtr,
   }
   return rc;
 }
+
 int sqlite3_bind_text(sqlite3_stmt *pStmt, int i, const char *zData, int nData,
                       void (*xDel)(void *)) {
-#ifdef __sqlite_unmodified_upstream
   return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
-#else
+}
+
+#ifndef __sqlite_unmodified_upstream
+int sqlite3_bind_text_(sqlite3_stmt *pStmt, int i, const char *zData, int nData,
+                      void (*xDel)(void *))
+    __attribute__((export_name("sqlite3_bind_text"))) {
   // xDel is a custom deallocator and if it is not SQLITE_STATIC
   // due to our IT architecture it can't be provided from other modules.
-  return bindText(pStmt, i, zData, nData,
-    (xDel==SQLITE_STATIC || xDel==SQLITE_TRANSIENT)?xDel:free, SQLITE_UTF8);
-#endif
+  // However the memory zData uses has to be cleaned up eventually.
+  add_object_to_release((void*)zData);
+  return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
 }
+#endif
+
 int sqlite3_bind_text64(sqlite3_stmt *pStmt, int i, const char *zData,
                         sqlite3_uint64 nData, void (*xDel)(void *),
                         unsigned char enc) {
