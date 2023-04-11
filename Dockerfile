@@ -7,10 +7,9 @@ RUN apt update \
     git \
     make \
     pkg-config \
-    libtinfo6 \
-    cargo
+    libtinfo6
 
-RUN cargo install marine --version 0.12.7
+RUN mkdir -p ~/.local/bin && curl -L https://github.com/fluencelabs/marine/releases/download/marine-v0.14.1/marine-linux-x86_64 -o ~/.local/bin/marine && chmod +x ~/.local/bin/marine
 
 VOLUME /code
 WORKDIR /code
