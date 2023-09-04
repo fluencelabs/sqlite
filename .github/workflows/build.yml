@@ -30,7 +30,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Setup marine
-        uses: fluencelabs/setup-marine@FLU-384
+        uses: fluencelabs/setup-marine@v1
         with:
           artifact-name: "marine"
 
