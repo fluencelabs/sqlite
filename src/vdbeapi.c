@@ -1541,7 +1541,6 @@ int sqlite3_bind_blob_(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
   // However the memory zData uses has to be cleaned up eventually.
   // So, it is cleared as intended in IT, and xDel is set to SQLITE_TRANSIENT to make sqlite copy the data.
   add_object_to_release((void*)zData);
-
   return bindText(pStmt, i, zData, nData, SQLITE_TRANSIENT, 0);
 }
 #endif
