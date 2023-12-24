@@ -1537,11 +1537,12 @@ int sqlite3_bind_blob_(sqlite3_stmt *pStmt, int i, const void *zData, int nData,
     return SQLITE_MISUSE_BKPT;
 #endif
 
-  // xDel is a custom deallocator and if it is not SQLITE_STATIC
-  // due to our IT architecture it can't be provided from other modules.
+  // xDel is a custom deallocator and due to our IT architecture it can't be provided from other modules.
   // However the memory zData uses has to be cleaned up eventually.
+  // So, it is cleared as intended in IT, and xDel is set to SQLITE_TRANSIENT to make sqlite copy the data.
   add_object_to_release((void*)zData);
-  return bindText(pStmt, i, zData, nData, xDel, 0);
+
+  return bindText(pStmt, i, zData, nData, SQLITE_TRANSIENT, 0);
 }
 #endif
 
@@ -1613,11 +1614,11 @@ int sqlite3_bind_text(sqlite3_stmt *pStmt, int i, const char *zData, int nData,
 int sqlite3_bind_text_(sqlite3_stmt *pStmt, int i, const char *zData, int nData,
                       void (*xDel)(void *))
     __attribute__((export_name("sqlite3_bind_text"))) {
-  // xDel is a custom deallocator and if it is not SQLITE_STATIC
-  // due to our IT architecture it can't be provided from other modules.
+  // xDel is a custom deallocator and due to our IT architecture it can't be provided from other modules.
   // However the memory zData uses has to be cleaned up eventually.
+  // So, it is cleared as intended in IT, and xDel is set to SQLITE_TRANSIENT to make sqlite copy the data.
   add_object_to_release((void*)zData);
-  return bindText(pStmt, i, zData, nData, xDel, SQLITE_UTF8);
+  return bindText(pStmt, i, zData, nData, SQLITE_TRANSIENT, SQLITE_UTF8);
 }
 #endif
 
